@@ -31,8 +31,10 @@ class GameState:
                 return [] # Terminal state
 
         successors = []
+        successors = []
         for r, c in moves:
-            new_board = self.board.apply_move(r, c, self.player)
+            # apply_move now returns (board, flipped_list)
+            new_board, _ = self.board.apply_move(r, c, self.player)
             successors.append(GameState(new_board, -self.player))
         
         return successors

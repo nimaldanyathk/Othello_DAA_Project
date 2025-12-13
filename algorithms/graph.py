@@ -42,26 +42,34 @@ def dfs_explore(start_state, max_depth=3):
                     visited.add(successor)
                     stack.append((successor, depth + 1))
 
-def depth_limited_dfs(state, depth, player, heuristic_func):
+def depth_limited_dfs_generator(state, depth, player, heuristic_func):
     """
-    Depth-Limited DFS (Minimax) to find the best move.
-    Returns (best_score, best_move_state).
-    
-    This effectively uses the graph structure to perform a lookahead.
+    Generator version of Minimax.
+    Yields:
+        dict: {'type': 'search_node', 'state': state, 'depth': depth, 'score': val}
+    Returns:
+        (best_score, best_op) via StopIteration value (or final yield logic)
     """
+    # Yield current state visiting
+    yield {'type': 'search_node', 'state': state, 'depth': depth, 'score': None}
+
     if depth == 0 or state.is_terminal():
-        return heuristic_func(state.board, player), state
+        score = heuristic_func(state.board, player)
+        yield {'type': 'leaf', 'state': state, 'depth': depth, 'score': score}
+        return score, state
 
     successors = state.get_successors()
     if not successors:
         # Pass turn
-        return depth_limited_dfs(state, depth-1, player, heuristic_func)
+        # We need to yield from recursive call
+        result = yield from depth_limited_dfs_generator(state, depth-1, player, heuristic_func)
+        return result
 
     best_score = float('-inf') if state.player == player else float('inf')
-    best_op = None # The resulting state after the best move
+    best_op = None
 
     for successor in successors:
-        score, _ = depth_limited_dfs(successor, depth - 1, player, heuristic_func)
+        score, _ = yield from depth_limited_dfs_generator(successor, depth - 1, player, heuristic_func)
         
         if state.player == player: # Maximize
             if score > best_score:
@@ -74,16 +82,26 @@ def depth_limited_dfs(state, depth, player, heuristic_func):
                 
     return best_score, best_op
 
+def get_best_move_generator(state, depth=3):
+    """
+    Generator wrapper.
+    Yields visualization data.
+    Finally yields {'type': 'result', 'state': best_state}
+    """
+    # Use yield from to capture the return value (best_score, best_op)
+    # while propagating all visualization dicts up.
+    _, best_op = yield from depth_limited_dfs_generator(state, depth, state.player, weighted_heuristic)
+            
+    yield {'type': 'result', 'state': best_op}
+
 def get_best_move(state, depth=3):
     """
-    Wrapper for the decision making process.
+    Backward compatibility wrapper.
+    Consumes the generator and returns the final result.
     """
-    # Note: 'state' is the current node. We want the edge (move) that leads to the best child node.
-    # The depth_limited_dfs returns the best leaf score and the immediate successor that leads there (wait, recursive logic needs verify)
-    
-    # Actually standard Minimax returns value. The root call needs the move.
-    # My implementation above returns 'best_op' which is the successor state node.
-    # So we simply find which successor matches that board.
-    
-    _, best_state = depth_limited_dfs(state, depth, state.player, weighted_heuristic)
-    return best_state
+    gen = get_best_move_generator(state, depth)
+    result_state = None
+    for item in gen:
+        if item['type'] == 'result':
+            result_state = item['state']
+    return result_state
