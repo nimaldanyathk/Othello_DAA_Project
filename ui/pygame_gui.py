@@ -9,6 +9,10 @@ STATE_MENU = 0
 STATE_PLAYING = 1
 STATE_GAME_OVER = 2
 
+# Game Modes
+MODE_PvCPU = 0
+MODE_PvP = 1
+
 class PyGameUI:
     # Constants
     SCREEN_WIDTH = 900
@@ -16,22 +20,21 @@ class PyGameUI:
     BOARD_AREA_SIZE = 700
     
     # Colors - Distinct Palettes
-    # User / Board
     COLOR_BG = (34, 139, 34) # Green Board
     COLOR_BG_MENU = (40, 44, 52)
     COLOR_LINE = (0, 0, 0)
     COLOR_BLACK = (20, 20, 20)
     COLOR_WHITE = (240, 240, 240)
     
-    # Visualization - User
+    COLOR_BTN_NORMAL = (100, 100, 200)
+    COLOR_BTN_HOVER = (120, 120, 220)
+    COLOR_BTN_SELECTED = (50, 200, 50) # Green for selected mode
+    
+    # Visualization
     COLOR_RAY_VALID = (0, 255, 0)
     COLOR_RAY_INVALID = (255, 0, 0)
-    
-    # Visualization - CPU Search Tree
-    # Magenta/Cyan for high contrast tech/algo feel
-    COLOR_NODE_SEARCH = (255, 0, 255) # Magenta
-    COLOR_NODE_LEAF = (0, 255, 255)   # Cyan
-    COLOR_EDGE_TREE = (255, 215, 0)   # Gold lines
+    COLOR_NODE_SEARCH = (255, 0, 255)
+    COLOR_NODE_LEAF = (0, 255, 255)
     
     def __init__(self):
         pygame.init()
@@ -43,12 +46,16 @@ class PyGameUI:
         self.font = pygame.font.SysFont('Arial', 24)
         self.small_font = pygame.font.SysFont('Arial', 18)
         
-        # Game State
+        # App State
         self.app_state = STATE_MENU
         self.grid_size = 8
-        self.game_state = None
+        self.game_mode = MODE_PvCPU
         
-        # Players
+        # Menu State
+        self.selected_mode_option = MODE_PvCPU # Default
+        
+        # Game State
+        self.game_state = None
         self.human_player = Board.BLACK
         self.ai_player = Board.WHITE
         
@@ -56,17 +63,17 @@ class PyGameUI:
         self.algo_mode = False
         self.ai_generator = None
         self.current_vis_data = None
-        self.vis_history = [] # To draw tree lines [(parent_pos, child_pos), ...] logic needs state tracking
         
         self.running = True
 
     def start_game(self, size):
         self.grid_size = size
-        # Re-initialize Board with new size
+        self.game_mode = self.selected_mode_option
+        
+        # Re-initialize Board
         initial_board = Board(size=size)
         self.game_state = GameState(board=initial_board, player=Board.BLACK)
         self.app_state = STATE_PLAYING
-        self.vis_history = []
         self.current_vis_data = None
         self.ai_generator = None
         
@@ -75,60 +82,101 @@ class PyGameUI:
 
     def draw_menu(self):
         self.screen.fill(self.COLOR_BG_MENU)
+        center_x = self.SCREEN_WIDTH // 2
         
         # Title
         title = self.font_title.render("OTHELLO - DAA PROJECT", True, self.COLOR_WHITE)
-        self.screen.blit(title, (self.SCREEN_WIDTH//2 - title.get_width()//2, 100))
+        self.screen.blit(title, (center_x - title.get_width()//2, 80))
         
-        # Options
-        info = self.font.render("Select Grid Size:", True, (200, 200, 200))
-        self.screen.blit(info, (self.SCREEN_WIDTH//2 - info.get_width()//2, 250))
+        # --- 1. Select Game Mode ---
+        lbl_mode = self.font.render("1. Select Game Mode:", True, (200, 200, 200))
+        self.screen.blit(lbl_mode, (center_x - lbl_mode.get_width()//2, 180))
+        
+        modes = [("1 Player (CPU)", MODE_PvCPU), ("2 Players (PvP)", MODE_PvP)]
+        self.menu_buttons_mode = []
+        
+        mode_btn_width = 200
+        start_x_mode = center_x - (len(modes) * (mode_btn_width + 20)) // 2
+        
+        for i, (label, mode_val) in enumerate(modes):
+            x = start_x_mode + i * (mode_btn_width + 20)
+            y = 220
+            rect = pygame.Rect(x, y, mode_btn_width, 50)
+            
+            # Highlight selected
+            color = self.COLOR_BTN_SELECTED if self.selected_mode_option == mode_val else (200, 100, 100)
+            pygame.draw.rect(self.screen, color, rect, border_radius=5)
+            
+            # Text
+            txt = self.font.render(label, True, self.COLOR_WHITE)
+            self.screen.blit(txt, (x + mode_btn_width//2 - txt.get_width()//2, y + 25 - txt.get_height()//2))
+            
+            self.menu_buttons_mode.append((rect, mode_val))
+
+        # --- 2. Select Grid Size (Starts Game) ---
+        lbl_size = self.font.render("2. Start Game (Select Size):", True, (200, 200, 200))
+        self.screen.blit(lbl_size, (center_x - lbl_size.get_width()//2, 350))
         
         sizes = [4, 6, 8, 10]
-        # Buttons logic (simple rects)
-        self.menu_buttons = []
-        start_x = self.SCREEN_WIDTH//2 - ((len(sizes)*100)//2)
+        self.menu_buttons_size = []
+        start_x = center_x - ((len(sizes)*100)//2)
+        
         for i, s in enumerate(sizes):
             x = start_x + i * 100
-            y = 300
+            y = 390
             rect = pygame.Rect(x, y, 80, 50)
-            pygame.draw.rect(self.screen, (100, 100, 200), rect, border_radius=5)
+            pygame.draw.rect(self.screen, self.COLOR_BTN_NORMAL, rect, border_radius=5)
             
             txt = self.font.render(f"{s}x{s}", True, self.COLOR_WHITE)
             self.screen.blit(txt, (x + 40 - txt.get_width()//2, y + 25 - txt.get_height()//2))
             
-            self.menu_buttons.append((rect, s))
+            self.menu_buttons_size.append((rect, s))
 
     def handle_menu_click(self, pos):
-        for rect, size in self.menu_buttons:
+        # Check Mode Selection (Toggle)
+        for rect, mode_val in self.menu_buttons_mode:
+            if rect.collidepoint(pos):
+                self.selected_mode_option = mode_val
+                return
+
+        # Check Size Selection (Start Game)
+        for rect, size in self.menu_buttons_size:
             if rect.collidepoint(pos):
                 self.start_game(size)
+                return
 
     def draw_board(self):
         self.screen.fill(self.COLOR_BG)
         
-        # 1. Grid
+        # Grid
         for i in range(self.grid_size + 1):
             pos = i * self.CELL_SIZE
             pygame.draw.line(self.screen, self.COLOR_LINE, (pos, 0), (pos, self.BOARD_AREA_SIZE), 2)
             pygame.draw.line(self.screen, self.COLOR_LINE, (0, pos), (self.BOARD_AREA_SIZE, pos), 2)
             
-        # 2. Discs
+        # Discs
         for r in range(self.grid_size):
             for c in range(self.grid_size):
                 cell = self.game_state.board.grid[r][c]
                 if cell != Board.EMPTY:
                     self._draw_disc(r, c, cell, 255)
 
-        # 3. Visualization: Ghost States (AI)
-        if self.algo_mode and self.current_vis_data:
+        # Visualization: CPU
+        if self.algo_mode and self.current_vis_data and self.game_mode == MODE_PvCPU:
             self._draw_ai_visualization()
 
-        # 4. Visualization: Raycasting (User)
-        if self.algo_mode and self.game_state.player == self.human_player:
+        # Visualization: Raycasting (User)
+        # Show for current player if it's a human turn logic
+        is_human_turn = False
+        if self.game_mode == MODE_PvP:
+            is_human_turn = True
+        elif self.game_mode == MODE_PvCPU and self.game_state.player == self.human_player:
+            is_human_turn = True
+            
+        if self.algo_mode and is_human_turn:
             self._draw_user_visualization()
             
-        # 5. Side Panel
+        # Side Panel
         self._draw_side_panel()
 
     def _draw_disc(self, r, c, player, alpha):
@@ -148,7 +196,7 @@ class PyGameUI:
         mx, my = pygame.mouse.get_pos()
         if mx < self.BOARD_AREA_SIZE:
              c, r = mx // self.CELL_SIZE, my // self.CELL_SIZE
-             valid, logs = self.game_state.board.is_valid_move(r, c, self.human_player, return_debug=True)
+             valid, logs = self.game_state.board.is_valid_move(r, c, self.game_state.player, return_debug=True)
              
              center = (c * self.CELL_SIZE + self.CELL_SIZE//2, r * self.CELL_SIZE + self.CELL_SIZE//2)
              for log in logs:
@@ -159,58 +207,49 @@ class PyGameUI:
                 pygame.draw.circle(self.screen, color, end_pos, 6)
 
     def _draw_ai_visualization(self):
-        # Tint board
         s = pygame.Surface((self.BOARD_AREA_SIZE, self.BOARD_AREA_SIZE))
         s.set_alpha(40)
-        s.fill((50, 0, 50)) # Dark Purple tint
+        s.fill((50, 0, 50))
         self.screen.blit(s, (0,0))
         
         data = self.current_vis_data
-        
-        # Draw Ghost State
         if data['type'] in ('search_node', 'leaf'):
              state = data['state']
              if state:
                  for r in range(self.grid_size):
                     for c in range(self.grid_size):
                         if state.board.grid[r][c] != Board.EMPTY:
-                             self._draw_disc(r, c, state.board.grid[r][c], 100) # Ghost opacity
+                             self._draw_disc(r, c, state.board.grid[r][c], 100)
                              
-        # Tree Edge Visualization
-        # We assume the AI is traversing. We can draw a line from center to current node if we tracked parent.
-        # Simplified: Draw a border indicating depth Color
-        colors = [(255, 0, 0), (255, 165, 0), (255, 255, 0), (0, 255, 0)] # Depth colors
+        colors = [(255, 0, 0), (255, 165, 0), (255, 255, 0), (0, 255, 0)]
         depth = data.get('depth', 0)
         col = colors[depth % len(colors)]
         pygame.draw.rect(self.screen, col, (0, 0, self.BOARD_AREA_SIZE, self.BOARD_AREA_SIZE), 5)
-        
-        # Info text overlay on board
         txt = self.font.render(f"SIMULATING DEPTH {depth}", True, col)
         self.screen.blit(txt, (20, 20))
 
     def _draw_side_panel(self):
         panel_x = self.BOARD_AREA_SIZE
         pygame.draw.rect(self.screen, (60, 60, 60), (panel_x, 0, self.SCREEN_WIDTH-panel_x, self.SCREEN_HEIGHT))
-        
-        # Padding
         x = panel_x + 20
         y = 20
         
-        # Turn Info
+        mode_str = "1 PLAYER (CPU)" if self.game_mode == MODE_PvCPU else "2 PLAYERS (PvP)"
+        self.screen.blit(self.small_font.render(mode_str, True, (200, 200, 100)), (x, y))
+        y += 40
+        
         turn_str = "BLACK" if self.game_state.player == Board.BLACK else "WHITE"
         turn_col = (0,0,0) if self.game_state.player == Board.BLACK else (255,255,255)
         lbl = self.font_title.render(turn_str, True, turn_col, (100,100,100))
         self.screen.blit(lbl, (x, y))
         y += 60
         
-        # Scores
         b, w = self.game_state.board.get_counts()
         self.screen.blit(self.font.render(f"Black: {b}", True, self.COLOR_WHITE), (x, y))
         y += 30
         self.screen.blit(self.font.render(f"White: {w}", True, self.COLOR_WHITE), (x, y))
         y += 60
         
-        # Algo Mode Toggle
         mode_txt = "ON" if self.algo_mode else "OFF"
         mode_col = (0, 255, 0) if self.algo_mode else (100, 100, 100)
         self.screen.blit(self.font.render("Algo View (Press A)", True, (200,200,200)), (x, y))
@@ -218,34 +257,28 @@ class PyGameUI:
         self.screen.blit(self.font_title.render(mode_txt, True, mode_col), (x, y))
         y += 60
         
+        if self.game_state.is_terminal():
+            winner = self.game_state.get_winner()
+            t = "Black Wins!" if winner==1 else "White Wins!" if winner==-1 else "Draw!"
+            self.screen.blit(self.font_title.render(t, True, (255,255,0)), (x, y))
+
         # Restart
         self.btn_restart = pygame.Rect(x, self.SCREEN_HEIGHT - 80, 160, 50)
         pygame.draw.rect(self.screen, (200, 50, 50), self.btn_restart, border_radius=5)
-        oms = self.font.render("NEW GAME", True, self.COLOR_WHITE)
+        oms = self.font.render("MENU", True, self.COLOR_WHITE)
         self.screen.blit(oms, (self.btn_restart.centerx - oms.get_width()//2, self.btn_restart.centery - oms.get_height()//2))
 
     def update_ai(self):
         if not self.ai_generator:
             self.ai_generator = get_best_move_generator(self.game_state, depth=3)
-        
         try:
-            # FRAME DELAY logic for smoother visualization
-            # Just do 1 yield per frame update
             vis = next(self.ai_generator)
-            
             if vis['type'] == 'result':
                 self.game_state = vis['state']
-                result_state = vis['state']
                 self.ai_generator = None
                 self.current_vis_data = None
-                
-                # Check game over after move
-                if result_state.is_terminal():
-                     # self.app_state = STATE_GAME_OVER
-                     pass
             else:
                 self.current_vis_data = vis
-                
         except StopIteration:
             self.ai_generator = None
 
@@ -267,12 +300,19 @@ class PyGameUI:
                             self.algo_mode = not self.algo_mode
                     
                     if event.type == pygame.MOUSEBUTTONDOWN:
-                        # User move
-                         if self.game_state.player == self.human_player:
+                        # Human Move Logic
+                        can_move = False
+                        if self.game_mode == MODE_PvP:
+                            can_move = True # Always human in PvP
+                        elif self.game_mode == MODE_PvCPU:
+                            if self.game_state.player == self.human_player:
+                                can_move = True
+                                
+                        if can_move:
                              if mx < self.BOARD_AREA_SIZE:
                                  c, r = mx // self.CELL_SIZE, my // self.CELL_SIZE
-                                 if self.game_state.board.is_valid_move(r, c, self.human_player):
-                                     new_board, _ = self.game_state.board.apply_move(r, c, self.human_player)
+                                 if self.game_state.board.is_valid_move(r, c, self.game_state.player):
+                                     new_board, _ = self.game_state.board.apply_move(r, c, self.game_state.player)
                                      # Match successor
                                      successors = self.game_state.get_successors()
                                      for s in successors:
@@ -281,7 +321,7 @@ class PyGameUI:
                                              break
                         
                         # Restart Button
-                         if hasattr(self, 'btn_restart') and self.btn_restart.collidepoint((mx, my)):
+                        if hasattr(self, 'btn_restart') and self.btn_restart.collidepoint((mx, my)):
                              self.app_state = STATE_MENU
 
             # Render
@@ -290,14 +330,11 @@ class PyGameUI:
             elif self.app_state == STATE_PLAYING:
                 self.draw_board()
                 
-                if self.game_state.player == self.ai_player and not self.game_state.is_terminal():
-                    # AI logic
-                    # If algo mode is ON, we rely on the loop's consistent tick. 
-                    # If OFF, we might want to speed it up, but for consistency let's keep it same or process multiple.
+                # AI Logic
+                if self.game_mode == MODE_PvCPU and self.game_state.player == self.ai_player and not self.game_state.is_terminal():
                     if self.algo_mode:
                         self.update_ai()
                     else:
-                        # Process multiple steps to be faster
                         for _ in range(20): 
                             if self.game_state.player == self.ai_player:
                                 self.update_ai()
