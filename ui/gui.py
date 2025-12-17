@@ -18,8 +18,18 @@ class OthelloGUI:
         self.human_player = human_player
         self.ai_player = -human_player
         
+        self.ai_timer = None # Handle for the scheduled AI move
+        
         self._setup_ui()
         self._draw_board()
+
+    def _cancel_ai_timer(self):
+        if self.ai_timer:
+            try:
+                self.root.after_cancel(self.ai_timer)
+            except ValueError:
+                pass # Ignore if already cancelled or invalid
+            self.ai_timer = None
 
     def _setup_ui(self):
         # SIMPLIFIED LAYOUT: Direct packing to root
@@ -38,7 +48,7 @@ class OthelloGUI:
         self.btn_reset = tk.Button(self.frame_info, text="New Game", command=self._reset_game)
         self.btn_reset.pack(pady=20)
         
-        self.btn_ai_move = tk.Button(self.frame_info, text="Force AI Move", command=self._ai_move_step)
+        self.btn_ai_move = tk.Button(self.frame_info, text="Force AI Move", command=self._force_ai_move)
         self.btn_ai_move.pack(pady=5)
 
         # 2. Board on the Left
@@ -52,10 +62,20 @@ class OthelloGUI:
         print(f"UI Layout Refreshed. Canvas mapped: {self.canvas.winfo_ismapped()}")
 
     def _reset_game(self):
+        self._cancel_ai_timer()
         self.game_state = GameState()
         self._update_display()
 
+    def _force_ai_move(self):
+        # Wrapper for button to manually trigger AI
+        self._cancel_ai_timer()
+        self._ai_move_step()
+
     def _draw_board(self):
+        # Safety check
+        if not self.root.winfo_exists():
+            return
+            
         print("Drawing board...")
         self.canvas.delete("all")
         # Draw grid lines
@@ -100,8 +120,9 @@ class OthelloGUI:
                 t = "Black Wins!" if winner == 1 else "White Wins!" if winner == -1 else "Draw!"
                 messagebox.showinfo("Game Over", t)
         elif self.game_state.player == self.ai_player:
-            # Schedule AI move
-            self.root.after(500, self._ai_move_step)
+            # Schedule AI move with handle
+            self._cancel_ai_timer()
+            self.ai_timer = self.root.after(500, self._ai_move_step)
         
         else:
              # Human turn check
@@ -145,23 +166,35 @@ class OthelloGUI:
                 print("Error: Successor not found for valid move!")
 
     def _ai_move_step(self):
+        # 1. Safety Check: If window destroyed, stop
+        try:
+             if not self.root.winfo_exists():
+                 return
+        except tk.TclError:
+             return
+
+        self.ai_timer = None # Timer fired, so we clear the handle
+        
         if self.game_state.is_terminal():
             return
             
         if self.game_state.player != self.ai_player:
-            # If it's human turn but no moves, the rules say pass. 
-            # get_successors handles pass automatically.
-            # If get_successors returns a pass state, we should take it.
-            pass
+            # Not my turn?
+            return
         
         # Calculate best move
-        # Using Greedy Algorithm
         from algorithms.greedy import get_greedy_move
+        
+        # Force UI update to show 'computing' state if we had one
+        self.root.update_idletasks()
+        
         next_state = get_greedy_move(self.game_state)
         
         if next_state:
             self.game_state = next_state
             self._update_display()
         else:
-            # No moves (should be handled by is_terminal or pass logic)
+            # AI has no moves (Passed) OR stuck
+            # Greedy logic already returns Pass state if possible.
+            # If infinite loop or None:
             pass
