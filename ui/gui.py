@@ -79,7 +79,8 @@ class OthelloGUI:
             for r, c in moves:
                 x = c * self.CELL_SIZE + self.CELL_SIZE // 2
                 y = r * self.CELL_SIZE + self.CELL_SIZE // 2
-                self.canvas.create_oval(x-3, y-3, x+3, y+3, fill="red")
+                # Valid Move Hint: Semi-transparent look using stipple (if supported) or just outline
+                self.canvas.create_oval(x-8, y-8, x+8, y+8, fill="green", outline="green", width=2)
 
     def _update_display(self):
         self._draw_board()
@@ -96,6 +97,18 @@ class OthelloGUI:
         elif self.game_state.player == self.ai_player:
             # Schedule AI move
             self.root.after(500, self._ai_move_step)
+        
+        else:
+             # Human turn check
+             moves = self.game_state.board.get_valid_moves(self.game_state.player)
+             if not moves:
+                 # No moves, but not terminal -> Pass Turn
+                 messagebox.showinfo("Pass Turn", "No valid moves available. Passing turn.")
+                 successors = self.game_state.get_successors()
+                 if successors:
+                     self.game_state = successors[0]
+                     # Schedule update to avoid recursion depth issues or immediate re-check
+                     self.root.after(100, self._update_display)
 
     def _on_click(self, event):
         if self.game_state.player != self.human_player:
@@ -112,7 +125,7 @@ class OthelloGUI:
             # Simple apply for human (we know the move is valid, so we can just apply it directly to get state)
             # But to strictly test the graph:
             found_next = None
-            target_board = self.game_state.board.apply_move(r, c, self.human_player)
+            target_board, _ = self.game_state.board.apply_move(r, c, self.human_player)
             
             for s in successors:
                 if s.board.grid == target_board.grid:
