@@ -9,9 +9,10 @@ class OthelloGUI:
     BOARD_SIZE = 8 * CELL_SIZE
     OFFSET = 10
 
-    def __init__(self, root, human_player=Board.BLACK):
+    def __init__(self, root, human_player=Board.BLACK, on_game_over=None):
         self.root = root
         self.root.title("Othello - DAA Graph Project")
+        self.on_game_over = on_game_over
         
         self.game_state = GameState()
         self.human_player = human_player
@@ -92,8 +93,12 @@ class OthelloGUI:
 
         if self.game_state.is_terminal():
             winner = self.game_state.get_winner()
-            t = "Black Wins!" if winner == 1 else "White Wins!" if winner == -1 else "Draw!"
-            messagebox.showinfo("Game Over", t)
+            if self.on_game_over:
+                b, w = self.game_state.board.get_counts()
+                self.on_game_over(winner, b, w)
+            else:
+                t = "Black Wins!" if winner == 1 else "White Wins!" if winner == -1 else "Draw!"
+                messagebox.showinfo("Game Over", t)
         elif self.game_state.player == self.ai_player:
             # Schedule AI move
             self.root.after(500, self._ai_move_step)
