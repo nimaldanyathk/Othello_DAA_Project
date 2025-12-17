@@ -9,13 +9,13 @@ class OthelloGUI:
     BOARD_SIZE = 8 * CELL_SIZE
     OFFSET = 10
 
-    def __init__(self, root):
+    def __init__(self, root, human_player=Board.BLACK):
         self.root = root
         self.root.title("Othello - DAA Graph Project")
         
         self.game_state = GameState()
-        self.ai_player = Board.WHITE # CPU is White
-        self.human_player = Board.BLACK # Human is Black
+        self.human_player = human_player
+        self.ai_player = -human_player
         
         self._setup_ui()
         self._draw_board()
