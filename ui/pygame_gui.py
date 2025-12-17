@@ -2,7 +2,9 @@ import pygame
 import sys
 from model.board import Board
 from model.game_state import GameState
-from algorithms.graph import get_best_move_generator
+from algorithms.graph import get_best_move_generator, weighted_heuristic
+from algorithms.heuristics import get_cell_weight
+import os
 
 # Enums
 STATE_MENU = 0
@@ -38,8 +40,27 @@ class PyGameUI:
     
     def __init__(self):
         pygame.init()
+        
+        self.sound_enabled = False
+        try:
+            pygame.mixer.init()
+            self.sound_enabled = True
+        except (NotImplementedError, pygame.error) as e:
+            print(f"Warning: Audio system unavailable - {e}")
+        
         self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
         pygame.display.set_caption("Othello - DAA Algorithm Visualization")
+        
+        # Load Sounds
+        self.sounds = {}
+        if self.sound_enabled:
+            try:
+                self.sounds['move'] = pygame.mixer.Sound('assets/sounds/move.wav')
+                self.sounds['flip'] = pygame.mixer.Sound('assets/sounds/flip.wav')
+                self.sounds['win'] = pygame.mixer.Sound('assets/sounds/win.wav')
+            except Exception as e:
+                print(f"Warning: Sound loading failed - {e}")
+                self.sound_enabled = False # Disable if loading fails
         
         self.clock = pygame.time.Clock()
         self.font_title = pygame.font.SysFont('Arial', 40, bold=True)
@@ -61,8 +82,10 @@ class PyGameUI:
         
         # Algo Mode
         self.algo_mode = False
+        self.heatmap_mode = False
         self.ai_generator = None
         self.current_vis_data = None
+        self.last_eval_score = 0
         
         self.running = True
 
@@ -76,6 +99,8 @@ class PyGameUI:
         self.app_state = STATE_PLAYING
         self.current_vis_data = None
         self.ai_generator = None
+        self.last_eval_score = 0
+        self.play_sound('move')
         
         # Recalculate cell size
         self.CELL_SIZE = self.BOARD_AREA_SIZE // self.grid_size
@@ -137,6 +162,7 @@ class PyGameUI:
         for rect, mode_val in self.menu_buttons_mode:
             if rect.collidepoint(pos):
                 self.selected_mode_option = mode_val
+                self.play_sound('flip')
                 return
 
         # Check Size Selection (Start Game)
@@ -144,6 +170,13 @@ class PyGameUI:
             if rect.collidepoint(pos):
                 self.start_game(size)
                 return
+
+    def play_sound(self, name):
+        if self.sound_enabled and name in self.sounds:
+            try:
+                self.sounds[name].play()
+            except:
+                pass
 
     def draw_board(self):
         self.screen.fill(self.COLOR_BG)
@@ -153,6 +186,10 @@ class PyGameUI:
             pos = i * self.CELL_SIZE
             pygame.draw.line(self.screen, self.COLOR_LINE, (pos, 0), (pos, self.BOARD_AREA_SIZE), 2)
             pygame.draw.line(self.screen, self.COLOR_LINE, (0, pos), (self.BOARD_AREA_SIZE, pos), 2)
+
+        # Heatmap Overlay
+        if self.heatmap_mode:
+            self._draw_heatmap()
             
         # Discs
         for r in range(self.grid_size):
@@ -178,6 +215,23 @@ class PyGameUI:
             
         # Side Panel
         self._draw_side_panel()
+        
+    def _draw_heatmap(self):
+        s = pygame.Surface((self.CELL_SIZE, self.CELL_SIZE), pygame.SRCALPHA)
+        for r in range(self.grid_size):
+            for c in range(self.grid_size):
+                w = get_cell_weight(r, c, self.grid_size)
+                if w > 1:
+                     # Greenish for good
+                     color = (0, 255, 0, 100) if w == 100 else (100, 255, 100, 50)
+                elif w < 1:
+                     # Reddish for bad
+                     color = (255, 0, 0, 150) if w == -50 else (255, 100, 100, 50)
+                else:
+                     continue
+                
+                pygame.draw.rect(s, color, s.get_rect())
+                self.screen.blit(s, (c*self.CELL_SIZE, r*self.CELL_SIZE))
 
     def _draw_disc(self, r, c, player, alpha):
         x = c * self.CELL_SIZE + self.CELL_SIZE // 2
@@ -227,6 +281,45 @@ class PyGameUI:
         pygame.draw.rect(self.screen, col, (0, 0, self.BOARD_AREA_SIZE, self.BOARD_AREA_SIZE), 5)
         txt = self.font.render(f"SIMULATING DEPTH {depth}", True, col)
         self.screen.blit(txt, (20, 20))
+        
+        # Pruning Visualization
+        if data['type'] == 'prune':
+            p_state = data['state']
+            if p_state:
+                 # Just flash a red border or text
+                 pygame.draw.rect(self.screen, (255, 0, 0), (0, 0, self.BOARD_AREA_SIZE, self.BOARD_AREA_SIZE), 10)
+                 t = self.font_title.render("PRUNED!", True, (255, 0, 0))
+                 self.screen.blit(t, (self.BOARD_AREA_SIZE//2 - t.get_width()//2, self.BOARD_AREA_SIZE//2))
+
+    def _draw_eval_bar(self, x, y, width, height):
+        # Background
+        pygame.draw.rect(self.screen, (50, 50, 50), (x, y, width, height))
+        
+        # Normalized score: -100 (White winning) to +100 (Black winning)
+        # Clamped
+        score = max(-500, min(500, self.last_eval_score))
+        
+        # Center is 0
+        center_y = y + height // 2
+        
+        # Height of bar per score unit
+        # Full height (height/2) represents 100 points roughly for visual
+        pixels_per_point = (height/2) / 100
+        bar_h = abs(score) * pixels_per_point
+        
+        if score > 0:
+            # Black advantage (Bottom up from center? Or Top? Usually Black is bottom in Othello/Chess conventions varies. Let's say Black is positive/Up)
+            # Actually standard Evaluation bar: Top is usually Advantage White if White is top player.
+            # Visual: Black is positive (Up from center)
+            rect = pygame.Rect(x, center_y - bar_h, width, bar_h)
+            pygame.draw.rect(self.screen, (0, 0, 0), rect) # Black bar
+        else:
+            # White advantage (Down from center)
+            rect = pygame.Rect(x, center_y, width, bar_h)
+            pygame.draw.rect(self.screen, (255, 255, 255), rect) # White bar
+            
+        # Center Line
+        pygame.draw.line(self.screen, (100, 100, 100), (x, center_y), (x + width, center_y), 1)
 
     def _draw_side_panel(self):
         panel_x = self.BOARD_AREA_SIZE
@@ -252,15 +345,31 @@ class PyGameUI:
         
         mode_txt = "ON" if self.algo_mode else "OFF"
         mode_col = (0, 255, 0) if self.algo_mode else (100, 100, 100)
-        self.screen.blit(self.font.render("Algo View (Press A)", True, (200,200,200)), (x, y))
-        y += 30
-        self.screen.blit(self.font_title.render(mode_txt, True, mode_col), (x, y))
-        y += 60
+        mode_txt = "ON" if self.algo_mode else "OFF"
+        mode_col = (0, 255, 0) if self.algo_mode else (100, 100, 100)
+        self.screen.blit(self.font.render("Algo View (A)", True, (200,200,200)), (x, y))
+        self.screen.blit(self.font_title.render(mode_txt, True, mode_col), (x + 140, y - 5))
+        y += 40
+        
+        hm_txt = "ON" if self.heatmap_mode else "OFF"
+        hm_col = (0, 255, 0) if self.heatmap_mode else (100, 100, 100)
+        self.screen.blit(self.font.render("Heatmap (H)", True, (200,200,200)), (x, y))
+        self.screen.blit(self.font_title.render(hm_txt, True, hm_col), (x + 140, y - 5))
+        y += 50
+
+        # Eval Bar
+        self._draw_eval_bar(x, y, 40, 150)
+        # Text
+        sc = self.last_eval_score
+        col = (0, 255, 0) if sc > 0 else (255, 0, 0)
+        self.screen.blit(self.small_font.render(f"Eval: {sc}", True, col), (x + 50, y + 70))
+        y += 170
         
         if self.game_state.is_terminal():
             winner = self.game_state.get_winner()
             t = "Black Wins!" if winner==1 else "White Wins!" if winner==-1 else "Draw!"
             self.screen.blit(self.font_title.render(t, True, (255,255,0)), (x, y))
+            self.play_sound('win')
 
         # Restart
         self.btn_restart = pygame.Rect(x, self.SCREEN_HEIGHT - 80, 160, 50)
@@ -275,10 +384,19 @@ class PyGameUI:
             vis = next(self.ai_generator)
             if vis['type'] == 'result':
                 self.game_state = vis['state']
+                
+                # Update Score for Eval Bar
+                self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
+                
                 self.ai_generator = None
                 self.current_vis_data = None
+                self.play_sound('move')
             else:
                 self.current_vis_data = vis
+                # Optional: Play ticking sound for search?
+                if vis['type'] == 'prune':
+                     # self.play_sound('flip') # Maybe too annoying
+                     pass
         except StopIteration:
             self.ai_generator = None
 
@@ -298,6 +416,9 @@ class PyGameUI:
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_a:
                             self.algo_mode = not self.algo_mode
+                        if event.key == pygame.K_h:
+                            self.heatmap_mode = not self.heatmap_mode
+                            self.play_sound('flip')
                     
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         # Human Move Logic
@@ -313,16 +434,21 @@ class PyGameUI:
                                  c, r = mx // self.CELL_SIZE, my // self.CELL_SIZE
                                  if self.game_state.board.is_valid_move(r, c, self.game_state.player):
                                      new_board, _ = self.game_state.board.apply_move(r, c, self.game_state.player)
+                                     self.play_sound('move')
+                                     
                                      # Match successor
                                      successors = self.game_state.get_successors()
                                      for s in successors:
                                          if s.board.grid == new_board.grid:
                                              self.game_state = s
+                                             # Update Eval
+                                             self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
                                              break
                         
                         # Restart Button
                         if hasattr(self, 'btn_restart') and self.btn_restart.collidepoint((mx, my)):
                              self.app_state = STATE_MENU
+                             self.play_sound('flip')
 
             # Render
             if self.app_state == STATE_MENU:

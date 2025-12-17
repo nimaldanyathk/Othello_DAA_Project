@@ -42,16 +42,16 @@ def dfs_explore(start_state, max_depth=3):
                     visited.add(successor)
                     stack.append((successor, depth + 1))
 
-def depth_limited_dfs_generator(state, depth, player, heuristic_func):
+def alpha_beta_generator(state, depth, alpha, beta, player, heuristic_func):
     """
-    Generator version of Minimax.
+    Generator version of Minimax with Alpha-Beta Pruning.
     Yields:
-        dict: {'type': 'search_node', 'state': state, 'depth': depth, 'score': val}
-    Returns:
-        (best_score, best_op) via StopIteration value (or final yield logic)
+        {'type': 'search_node', ...} for visiting
+        {'type': 'leaf', ...} for evaluation
+        {'type': 'prune', ...} for cutoff events
     """
     # Yield current state visiting
-    yield {'type': 'search_node', 'state': state, 'depth': depth, 'score': None}
+    yield {'type': 'search_node', 'state': state, 'depth': depth, 'score': None, 'alpha': alpha, 'beta': beta}
 
     if depth == 0 or state.is_terminal():
         score = heuristic_func(state.board, player)
@@ -61,26 +61,43 @@ def depth_limited_dfs_generator(state, depth, player, heuristic_func):
     successors = state.get_successors()
     if not successors:
         # Pass turn
-        # We need to yield from recursive call
-        result = yield from depth_limited_dfs_generator(state, depth-1, player, heuristic_func)
-        return result
+        # Recurse with same alpha/beta
+        val = yield from alpha_beta_generator(state, depth-1, alpha, beta, player, heuristic_func)
+        return val
 
-    best_score = float('-inf') if state.player == player else float('inf')
     best_op = None
 
-    for successor in successors:
-        score, _ = yield from depth_limited_dfs_generator(successor, depth - 1, player, heuristic_func)
-        
-        if state.player == player: # Maximize
-            if score > best_score:
-                best_score = score
-                best_op = successor
-        else: # Minimize (Opponent's turn)
-            if score < best_score:
-                best_score = score
+    if state.player == player: # Maximizer
+        value = float('-inf')
+        for successor in successors:
+            score, _ = yield from alpha_beta_generator(successor, depth - 1, alpha, beta, player, heuristic_func)
+            
+            if score > value:
+                value = score
                 best_op = successor
                 
-    return best_score, best_op
+            alpha = max(alpha, value)
+            if value >= beta:
+                # PRUNING
+                yield {'type': 'prune', 'state': successor, 'depth': depth, 'score': value}
+                break # Beta Cutoff
+        return value, best_op
+    
+    else: # Minimizer (Opponent)
+        value = float('inf')
+        for successor in successors:
+            score, _ = yield from alpha_beta_generator(successor, depth - 1, alpha, beta, player, heuristic_func)
+            
+            if score < value:
+                value = score
+                best_op = successor
+                
+            beta = min(beta, value)
+            if value <= alpha:
+                 # PRUNING
+                yield {'type': 'prune', 'state': successor, 'depth': depth, 'score': value}
+                break # Alpha Cutoff
+        return value, best_op
 
 def get_best_move_generator(state, depth=3):
     """
@@ -90,7 +107,8 @@ def get_best_move_generator(state, depth=3):
     """
     # Use yield from to capture the return value (best_score, best_op)
     # while propagating all visualization dicts up.
-    _, best_op = yield from depth_limited_dfs_generator(state, depth, state.player, weighted_heuristic)
+    # Start with full alpha-beta window [-inf, +inf]
+    _, best_op = yield from alpha_beta_generator(state, depth, float('-inf'), float('inf'), state.player, weighted_heuristic)
             
     yield {'type': 'result', 'state': best_op}
 
