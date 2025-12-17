@@ -137,8 +137,9 @@ class OthelloGUI:
             pass
         
         # Calculate best move
-        # Using Depth Limited DFS (Depth 3)
-        next_state = get_best_move(self.game_state, depth=3)
+        # Using Greedy Algorithm
+        from algorithms.greedy import get_greedy_move
+        next_state = get_greedy_move(self.game_state)
         
         if next_state:
             self.game_state = next_state
