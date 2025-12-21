@@ -48,8 +48,20 @@ class PyGameUI:
         except (NotImplementedError, pygame.error) as e:
             print(f"Warning: Audio system unavailable - {e}")
         
-        self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT), pygame.SCALED)
+        # Default Size
+        self.screen_width = 900
+        self.screen_height = 700
+        
+        # Use RESIZABLE instead of SCALED
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.RESIZABLE)
         pygame.display.set_caption("Othello - DAA Algorithm Visualization")
+        
+        # Layout Variables
+        self.board_area_size = 700
+        self.cell_size = 80
+        self.font_scale = 1.0
+        
+        self.calculate_layout(self.screen_width, self.screen_height)
         
         # Load Sounds
         self.sounds = {}
@@ -63,9 +75,6 @@ class PyGameUI:
                 self.sound_enabled = False # Disable if loading fails
         
         self.clock = pygame.time.Clock()
-        self.font_title = pygame.font.SysFont('Arial', 40, bold=True)
-        self.font = pygame.font.SysFont('Arial', 24)
-        self.small_font = pygame.font.SysFont('Arial', 18)
         
         # App State
         self.app_state = STATE_MENU
@@ -89,6 +98,36 @@ class PyGameUI:
         
         self.running = True
 
+    def calculate_layout(self, w, h):
+        self.screen_width = w
+        self.screen_height = h
+        
+        # Board takes up maximum square space possible, leaving room for panel
+        min_panel_width = 200
+        available_board_w = w - min_panel_width
+        
+        if available_board_w < h:
+            self.board_area_size = available_board_w
+        else:
+            self.board_area_size = h
+            
+        if self.board_area_size < 300:
+            self.board_area_size = 300
+            
+        if hasattr(self, 'grid_size') and self.grid_size > 0:
+            self.cell_size = self.board_area_size // self.grid_size
+        else:
+            self.cell_size = self.board_area_size // 8
+            
+        # Dynamic Font Sizing
+        title_size = int(min(w, h) * 0.05) if min(w,h) * 0.05 > 20 else 20
+        text_size = int(min(w, h) * 0.03) if min(w,h) * 0.03 > 14 else 14
+        small_size = int(min(w, h) * 0.025) if min(w,h) * 0.025 > 12 else 12
+        
+        self.font_title = pygame.font.SysFont('Arial', title_size, bold=True)
+        self.font = pygame.font.SysFont('Arial', text_size)
+        self.small_font = pygame.font.SysFont('Arial', small_size)
+
     def start_game(self, size):
         self.grid_size = size
         self.game_mode = self.selected_mode_option
@@ -103,11 +142,11 @@ class PyGameUI:
         self.play_sound('move')
         
         # Recalculate cell size
-        self.CELL_SIZE = self.BOARD_AREA_SIZE // self.grid_size
+        self.calculate_layout(self.screen_width, self.screen_height)
 
     def draw_menu(self):
         self.screen.fill(self.COLOR_BG_MENU)
-        center_x = self.SCREEN_WIDTH // 2
+        center_x = self.screen_width // 2
         
         # Title
         title = self.font_title.render("OTHELLO - DAA PROJECT", True, self.COLOR_WHITE)
@@ -183,9 +222,9 @@ class PyGameUI:
         
         # Grid
         for i in range(self.grid_size + 1):
-            pos = i * self.CELL_SIZE
-            pygame.draw.line(self.screen, self.COLOR_LINE, (pos, 0), (pos, self.BOARD_AREA_SIZE), 2)
-            pygame.draw.line(self.screen, self.COLOR_LINE, (0, pos), (self.BOARD_AREA_SIZE, pos), 2)
+            pos = i * self.cell_size
+            pygame.draw.line(self.screen, self.COLOR_LINE, (pos, 0), (pos, self.board_area_size), 2)
+            pygame.draw.line(self.screen, self.COLOR_LINE, (0, pos), (self.board_area_size, pos), 2)
 
         # Heatmap Overlay
         if self.heatmap_mode:
@@ -217,7 +256,7 @@ class PyGameUI:
         self._draw_side_panel()
         
     def _draw_heatmap(self):
-        s = pygame.Surface((self.CELL_SIZE, self.CELL_SIZE), pygame.SRCALPHA)
+        s = pygame.Surface((self.cell_size, self.cell_size), pygame.SRCALPHA)
         for r in range(self.grid_size):
             for c in range(self.grid_size):
                 w = get_cell_weight(r, c, self.grid_size)
@@ -231,37 +270,37 @@ class PyGameUI:
                      continue
                 
                 pygame.draw.rect(s, color, s.get_rect())
-                self.screen.blit(s, (c*self.CELL_SIZE, r*self.CELL_SIZE))
+                self.screen.blit(s, (c*self.cell_size, r*self.cell_size))
 
     def _draw_disc(self, r, c, player, alpha):
-        x = c * self.CELL_SIZE + self.CELL_SIZE // 2
-        y = r * self.CELL_SIZE + self.CELL_SIZE // 2
-        radius = self.CELL_SIZE // 2 - 5
+        x = c * self.cell_size + self.cell_size // 2
+        y = r * self.cell_size + self.cell_size // 2
+        radius = self.cell_size // 2 - 5
         color = self.COLOR_BLACK if player == Board.BLACK else self.COLOR_WHITE
         
         if alpha < 255:
-            s = pygame.Surface((self.CELL_SIZE, self.CELL_SIZE), pygame.SRCALPHA)
-            pygame.draw.circle(s, color + (alpha,), (self.CELL_SIZE//2, self.CELL_SIZE//2), radius)
-            self.screen.blit(s, (c*self.CELL_SIZE, r*self.CELL_SIZE))
+            s = pygame.Surface((self.cell_size, self.cell_size), pygame.SRCALPHA)
+            pygame.draw.circle(s, color + (alpha,), (self.cell_size//2, self.cell_size//2), radius)
+            self.screen.blit(s, (c*self.cell_size, r*self.cell_size))
         else:
             pygame.draw.circle(self.screen, color, (x, y), radius)
 
     def _draw_user_visualization(self):
         mx, my = pygame.mouse.get_pos()
-        if mx < self.BOARD_AREA_SIZE:
-             c, r = mx // self.CELL_SIZE, my // self.CELL_SIZE
+        if mx < self.board_area_size:
+             c, r = mx // self.cell_size, my // self.cell_size
              valid, logs = self.game_state.board.is_valid_move(r, c, self.game_state.player, return_debug=True)
              
-             center = (c * self.CELL_SIZE + self.CELL_SIZE//2, r * self.CELL_SIZE + self.CELL_SIZE//2)
+             center = (c * self.cell_size + self.cell_size//2, r * self.cell_size + self.cell_size//2)
              for log in logs:
                 end_r, end_c = log['end']
-                end_pos = (end_c * self.CELL_SIZE + self.CELL_SIZE//2, end_r * self.CELL_SIZE + self.CELL_SIZE//2)
+                end_pos = (end_c * self.cell_size + self.cell_size//2, end_r * self.cell_size + self.cell_size//2)
                 color = self.COLOR_RAY_VALID if log['valid'] else self.COLOR_RAY_INVALID
                 pygame.draw.line(self.screen, color, center, end_pos, 4)
                 pygame.draw.circle(self.screen, color, end_pos, 6)
 
     def _draw_ai_visualization(self):
-        s = pygame.Surface((self.BOARD_AREA_SIZE, self.BOARD_AREA_SIZE))
+        s = pygame.Surface((self.board_area_size, self.board_area_size))
         s.set_alpha(40)
         s.fill((50, 0, 50))
         self.screen.blit(s, (0,0))
@@ -278,7 +317,7 @@ class PyGameUI:
         colors = [(255, 0, 0), (255, 165, 0), (255, 255, 0), (0, 255, 0)]
         depth = data.get('depth', 0)
         col = colors[depth % len(colors)]
-        pygame.draw.rect(self.screen, col, (0, 0, self.BOARD_AREA_SIZE, self.BOARD_AREA_SIZE), 5)
+        pygame.draw.rect(self.screen, col, (0, 0, self.board_area_size, self.board_area_size), 5)
         txt = self.font.render(f"SIMULATING DEPTH {depth}", True, col)
         self.screen.blit(txt, (20, 20))
         
@@ -287,9 +326,9 @@ class PyGameUI:
             p_state = data['state']
             if p_state:
                  # Just flash a red border or text
-                 pygame.draw.rect(self.screen, (255, 0, 0), (0, 0, self.BOARD_AREA_SIZE, self.BOARD_AREA_SIZE), 10)
+                 pygame.draw.rect(self.screen, (255, 0, 0), (0, 0, self.board_area_size, self.board_area_size), 10)
                  t = self.font_title.render("PRUNED!", True, (255, 0, 0))
-                 self.screen.blit(t, (self.BOARD_AREA_SIZE//2 - t.get_width()//2, self.BOARD_AREA_SIZE//2))
+                 self.screen.blit(t, (self.board_area_size//2 - t.get_width()//2, self.board_area_size//2))
 
     def _draw_eval_bar(self, x, y, width, height):
         # Background
@@ -308,13 +347,11 @@ class PyGameUI:
         bar_h = abs(score) * pixels_per_point
         
         if score > 0:
-            # Black advantage (Bottom up from center? Or Top? Usually Black is bottom in Othello/Chess conventions varies. Let's say Black is positive/Up)
-            # Actually standard Evaluation bar: Top is usually Advantage White if White is top player.
-            # Visual: Black is positive (Up from center)
+            # Black advantage
             rect = pygame.Rect(x, center_y - bar_h, width, bar_h)
             pygame.draw.rect(self.screen, (0, 0, 0), rect) # Black bar
         else:
-            # White advantage (Down from center)
+            # White advantage
             rect = pygame.Rect(x, center_y, width, bar_h)
             pygame.draw.rect(self.screen, (255, 255, 255), rect) # White bar
             
@@ -322,8 +359,8 @@ class PyGameUI:
         pygame.draw.line(self.screen, (100, 100, 100), (x, center_y), (x + width, center_y), 1)
 
     def _draw_side_panel(self):
-        panel_x = self.BOARD_AREA_SIZE
-        pygame.draw.rect(self.screen, (60, 60, 60), (panel_x, 0, self.SCREEN_WIDTH-panel_x, self.SCREEN_HEIGHT))
+        panel_x = self.board_area_size
+        pygame.draw.rect(self.screen, (60, 60, 60), (panel_x, 0, self.screen_width-panel_x, self.screen_height))
         x = panel_x + 20
         y = 20
         
@@ -372,7 +409,7 @@ class PyGameUI:
             self.play_sound('win')
 
         # Restart
-        self.btn_restart = pygame.Rect(x, self.SCREEN_HEIGHT - 80, 160, 50)
+        self.btn_restart = pygame.Rect(x, self.screen_height - 80, 160, 50)
         pygame.draw.rect(self.screen, (200, 50, 50), self.btn_restart, border_radius=5)
         oms = self.font.render("MENU", True, self.COLOR_WHITE)
         self.screen.blit(oms, (self.btn_restart.centerx - oms.get_width()//2, self.btn_restart.centery - oms.get_height()//2))
@@ -412,6 +449,9 @@ class PyGameUI:
                     if event.key == pygame.K_f:
                         pygame.display.toggle_fullscreen()
 
+                if event.type == pygame.VIDEORESIZE:
+                    self.calculate_layout(event.w, event.h)
+
                 if self.app_state == STATE_MENU:
                     if event.type == pygame.MOUSEBUTTONDOWN:
                          self.handle_menu_click((mx, my))
@@ -434,8 +474,8 @@ class PyGameUI:
                                 can_move = True
                                 
                         if can_move:
-                             if mx < self.BOARD_AREA_SIZE:
-                                 c, r = mx // self.CELL_SIZE, my // self.CELL_SIZE
+                             if mx < self.board_area_size:
+                                 c, r = mx // self.cell_size, my // self.cell_size
                                  if self.game_state.board.is_valid_move(r, c, self.game_state.player):
                                      new_board, _ = self.game_state.board.apply_move(r, c, self.game_state.player)
                                      self.play_sound('move')
