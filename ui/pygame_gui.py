@@ -48,7 +48,7 @@ class PyGameUI:
         except (NotImplementedError, pygame.error) as e:
             print(f"Warning: Audio system unavailable - {e}")
         
-        self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT))
+        self.screen = pygame.display.set_mode((self.SCREEN_WIDTH, self.SCREEN_HEIGHT), pygame.SCALED)
         pygame.display.set_caption("Othello - DAA Algorithm Visualization")
         
         # Load Sounds
@@ -408,6 +408,10 @@ class PyGameUI:
                 if event.type == pygame.QUIT:
                     self.running = False
                     
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_f:
+                        pygame.display.toggle_fullscreen()
+
                 if self.app_state == STATE_MENU:
                     if event.type == pygame.MOUSEBUTTONDOWN:
                          self.handle_menu_click((mx, my))
