@@ -80,7 +80,7 @@ class TerminalUI:
     def _apply_move(self, r, c):
         # In our graph model, we just find the successor
         successors = self.game_state.get_successors()
-        target_board = self.game_state.board.apply_move(r, c, self.game_state.player)
+        target_board, _ = self.game_state.board.apply_move(r, c, self.game_state.player)
         for s in successors:
             if s.board.grid == target_board.grid:
                 self.game_state = s
