@@ -1,12 +1,12 @@
 # Othello - DAA Project
 
-A Python implementation of the classic board game **Othello (Reversi)**, featuring interactive algorithm visualization to demonstrate **Minimax (with Alpha-Beta Pruning)** and **Greedy** strategies.
+A Python implementation of the classic board game **Othello (Reversi)**
 
 ## Features
 
 *   **Game Modes:** 1 Player (vs AI) and 2 Players (PvP).
-*   **AI Algorithms:** Minimax (smart) and Greedy (simple).
-*   **Visualization:** Real-time AI search tree view, heatmaps, and move hints.
+*   **Algorithms:** Minimax and Greedy .
+*   **Visualization:** Real-time AI search tree view, heatmaps.
 *   **Interfaces:** Modern Graphical UI and classical Terminal UI.
 
 ## Requirements
