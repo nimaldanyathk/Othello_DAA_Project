@@ -95,6 +95,7 @@ class PyGameUI:
         self.ai_generator = None
         self.current_vis_data = None
         self.last_eval_score = 0
+        self.show_eval_bar = True # Toggle for Eval Bar
         
         self.running = True
 
@@ -392,14 +393,24 @@ class PyGameUI:
         hm_col = (0, 255, 0) if self.heatmap_mode else (100, 100, 100)
         self.screen.blit(self.font.render("Heatmap (H)", True, (200,200,200)), (x, y))
         self.screen.blit(self.font_title.render(hm_txt, True, hm_col), (x + 140, y - 5))
+        self.screen.blit(self.font.render("Heatmap (H)", True, (200,200,200)), (x, y))
+        self.screen.blit(self.font_title.render(hm_txt, True, hm_col), (x + 140, y - 5))
+        y += 40
+        
+        ev_txt = "ON" if self.show_eval_bar else "OFF"
+        ev_col = (0, 255, 0) if self.show_eval_bar else (100, 100, 100)
+        self.screen.blit(self.font.render("Eval Bar (E)", True, (200,200,200)), (x, y))
+        self.screen.blit(self.font_title.render(ev_txt, True, ev_col), (x + 140, y - 5))
         y += 50
 
         # Eval Bar
-        self._draw_eval_bar(x, y, 40, 150)
-        # Text
-        sc = self.last_eval_score
-        col = (0, 255, 0) if sc > 0 else (255, 0, 0)
-        self.screen.blit(self.small_font.render(f"Eval: {sc}", True, col), (x + 50, y + 70))
+        if self.show_eval_bar:
+            self._draw_eval_bar(x, y, 40, 150)
+            # Text
+            sc = self.last_eval_score
+            col = (0, 255, 0) if sc > 0 else (255, 0, 0)
+            self.screen.blit(self.small_font.render(f"Eval: {sc}", True, col), (x + 50, y + 70))
+        
         y += 170
         
         if self.game_state.is_terminal():
@@ -463,6 +474,9 @@ class PyGameUI:
                         if event.key == pygame.K_h:
                             self.heatmap_mode = not self.heatmap_mode
                             self.play_sound('flip')
+                        if event.key == pygame.K_e:
+                            self.show_eval_bar = not self.show_eval_bar
+                            self.play_sound('flip')
                     
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         # Human Move Logic
@@ -510,6 +524,22 @@ class PyGameUI:
                                 self.update_ai()
                             else:
                                 break
+
+                # --- AUTO PASS LOGIC (HUMAN) ---
+                if self.game_mode == MODE_PvP or (self.game_mode == MODE_PvCPU and self.game_state.player == self.human_player):
+                     if not self.game_state.is_terminal():
+                         if not self.game_state.board.get_valid_moves(self.game_state.player):
+                             # No moves -> Pass
+                             succ = self.game_state.get_successors()
+                             if succ:
+                                 # Render PASS notification
+                                 t = self.font_title.render("PASS!", True, (255, 0, 0))
+                                 self.screen.blit(t, (self.board_area_size//2 - t.get_width()//2, self.board_area_size//2))
+                                 pygame.display.flip()
+                                 pygame.time.delay(1000)
+                                 
+                                 self.game_state = succ[0]
+                                 self.current_vis_data = None
 
             pygame.display.flip()
             self.clock.tick(30 if self.algo_mode else 60)
