@@ -88,14 +88,14 @@ Our AI combines three powerful concepts to solve Othello efficiently.
 graph TD
     %% Nodes
     Start([Start AI Turn])
-    Lookup{Check Transposition Table}
-    DPHit[Return Cached Score]
-    Divide[Generate Valid Moves]
-    BaseCase{Is Leaf / Max Depth?}
-    Heuristic[Calculate Board Score]
-    Conquer[Recursively Search Next States]
-    Combine[Select Best Move (Min/Max)]
-    Memoize[Store Result in Table]
+    Lookup{"Check Transposition Table"}
+    DPHit["Return Cached Score"]
+    Divide["Generate Valid Moves"]
+    BaseCase{"Is Leaf / Max Depth?"}
+    Heuristic["Calculate Board Score"]
+    Conquer["Recursively Search Next States"]
+    Combine["Select Best Move (Min/Max)"]
+    Memoize["Store Result in Table"]
     End([Make Move])
 
     %% Flow
