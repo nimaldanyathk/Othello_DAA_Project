@@ -85,44 +85,55 @@ python pygame_dnc.py
 Our AI combines three powerful concepts to solve Othello efficiently.
 
 ```mermaid
-graph TD
-    %% Nodes
-    Start([Start AI Turn])
-    Lookup{"Check Transposition Table"}
-    DPHit["Return Cached Score"]
-    Divide["Generate Valid Moves"]
-    BaseCase{"Is Leaf / Max Depth?"}
-    Heuristic["Calculate Board Score"]
-    Conquer["Recursively Search Next States"]
-    Combine["Select Best Move (Min/Max)"]
-    Memoize["Store Result in Table"]
-    End([Make Move])
+flowchart TD
+    %% Custom Styling
+    classDef memory fill:#e1bee7,stroke:#4a148c,stroke-width:2px,color:#4a148c;
+    classDef logic fill:#bbdefb,stroke:#0d47a1,stroke-width:2px,color:#0d47a1;
+    classDef eval fill:#c8e6c9,stroke:#1b5e20,stroke-width:2px,color:#1b5e20;
+    classDef prune fill:#ffccbc,stroke:#bf360c,stroke-width:2px,color:#bf360c;
+    classDef start fill:#ffecb3,stroke:#ff6f00,stroke-width:2px,color:#ff6f00;
 
-    %% Flow
-    Start --> Lookup
-    Lookup -- "Found (DP Hit)" --> DPHit
-    Lookup -- "Not Found" --> Divide
-    Divide --> BaseCase
-    BaseCase -- "Yes" --> Heuristic
-    BaseCase -- "No" --> Conquer
-    Conquer --> Combine
-    Combine --> Memoize
-    Memoize --> End
-    DPHit --> End
-    Heuristic --> Combine
-
-    %% Styling
-    classDef dp fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef dnc fill:#bbf,stroke:#333,stroke-width:2px;
-    classDef base fill:#bfb,stroke:#333,stroke-width:2px;
+    Start([Start AI Turn]):::start --> Mode{"Select Algorithm"}:::start
     
-    class Lookup,DPHit,Memoize dp;
-    class Divide,Conquer,Combine dnc;
-    class Heuristic,BaseCase base;
+    %% Greedy Algo
+    Mode -- "Greedy Mode" --> G_Scan[Scan All Valid Moves]:::eval
+    G_Scan --> G_Pick[Pick Max Immediate Score]:::eval
+    G_Pick --> End([Make Move]):::start
+
+    %% Minimax Algo
+    Mode -- "Minimax / DP Mode" --> Root(Root Node):::logic
+    
+    subgraph "Recursive Search (Divide & Conquer)"
+        Root --> TP_Check{"Check DP Table (Memoization)"}:::memory
+        
+        TP_Check -- "Hit (Exact/Bound)" --> TP_Ret[Return Cached Value]:::memory
+        TP_Ret -.-> End
+        
+        TP_Check -- "Miss" --> Gen[Generate Successors]:::logic
+        Gen --> Loop{"Iterate Moves"}:::logic
+        
+        Loop --> AB_Check{"Alpha-Beta Prune?"}:::prune
+        AB_Check -- "Yes (Cutoff)" --> Prune[Stop Searching Branch]:::prune
+        
+        AB_Check -- "No" --> Recurse[Recursive Function Call]:::logic
+        Recurse --> Leaf{"Depth Limit / Game Over?"}:::eval
+        
+        Leaf -- "Yes" --> Heur[Calculate Heuristic Score]:::eval
+        Leaf -- "No" --> TP_Check
+        
+        Heur --> Backprop[Return Score to Parent]:::logic
+        Backprop --> UpdateAB[Update Alpha/Beta Bounds]:::logic
+        UpdateAB --> Loop
+    end
+    
+    Loop -- "All Moves Searched" --> Store[Store Result in DP Table]:::memory
+    Store --> Best[Select Best Move]:::logic
+    Best --> End
 ```
 
-1.  **Divide & Conquer (Blue):** We break the complex board state into smaller sub-problems (future moves) and solve them.
-2.  **Dynamic Programming (Pink):** We use a **Transposition Table** to remember board states we've already solved. If we encounter the same state again (via a different move order), we skip the work!
+1.  **Divide & Conquer (Blue):** We break the complex board state into smaller sub-problems.
+2.  **Dynamic Programming (Purple):** We use a **Transposition Table** to remember board states. If we encounter the same state again (via a different move order), we skip the work!
     *   *Visualization:* Look for "DP HIT!" in the side panel.
-3.  **Heuristics (Green):** When we can't search to the end, we estimate the board value using positional weights (corners are good, X-squares are bad).
+3.  **Heuristics (Green):** When we can't search to the end, we estimate based on corners and mobility.
+4.  **Alpha-Beta Pruning (Orange):** We stop searching branches that are obviously worse than what we've already found.
 
