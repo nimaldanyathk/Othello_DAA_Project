@@ -65,3 +65,64 @@ python main_terminal.py
 *   `ui/`:
     *   `pygame_gui.py`: Main GUI logic.
     *   `terminal.py`: Terminal UI logic.
+    *   `pygame_dnc.py`: Advanced GUI with Divide & Conquer and DP visualization.
+
+## Advanced Visualization (DP & Divide-and-Conquer)
+
+To see the AI's thought process with **Dynamic Programming** and **Divide & Conquer** visualization:
+
+```bash
+python pygame_dnc.py
+```
+
+**New Controls:**
+*   **'D' Key:** Toggle **DP Mode** (Dynamic Programming).
+*   **'H' Key:** Toggle **Algo View** (Visualize the search tree).
+*   **'E' Key:** Toggle Evaluation Bar.
+*   **'M' Key:** Toggle Heatmap.
+
+### AI Strategy Breakdown
+Our AI combines three powerful concepts to solve Othello efficiently.
+
+```mermaid
+graph TD
+    %% Nodes
+    Start([Start AI Turn])
+    Lookup{Check Transposition Table}
+    DPHit[Return Cached Score]
+    Divide[Generate Valid Moves]
+    BaseCase{Is Leaf / Max Depth?}
+    Heuristic[Calculate Board Score]
+    Conquer[Recursively Search Next States]
+    Combine[Select Best Move (Min/Max)]
+    Memoize[Store Result in Table]
+    End([Make Move])
+
+    %% Flow
+    Start --> Lookup
+    Lookup -- "Found (DP Hit)" --> DPHit
+    Lookup -- "Not Found" --> Divide
+    Divide --> BaseCase
+    BaseCase -- "Yes" --> Heuristic
+    BaseCase -- "No" --> Conquer
+    Conquer --> Combine
+    Combine --> Memoize
+    Memoize --> End
+    DPHit --> End
+    Heuristic --> Combine
+
+    %% Styling
+    classDef dp fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef dnc fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef base fill:#bfb,stroke:#333,stroke-width:2px;
+    
+    class Lookup,DPHit,Memoize dp;
+    class Divide,Conquer,Combine dnc;
+    class Heuristic,BaseCase base;
+```
+
+1.  **Divide & Conquer (Blue):** We break the complex board state into smaller sub-problems (future moves) and solve them.
+2.  **Dynamic Programming (Pink):** We use a **Transposition Table** to remember board states we've already solved. If we encounter the same state again (via a different move order), we skip the work!
+    *   *Visualization:* Look for "DP HIT!" in the side panel.
+3.  **Heuristics (Green):** When we can't search to the end, we estimate the board value using positional weights (corners are good, X-squares are bad).
+
