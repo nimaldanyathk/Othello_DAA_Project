@@ -4,16 +4,29 @@ from ui.pygame_gui import PyGameUI, STATE_MENU, STATE_PLAYING, MODE_PvCPU, MODE_
 from model.board import Board
 from model.game_state import GameState
 from algorithms.divide_and_conquer import get_dnc_move_generator, weighted_heuristic
+from algorithms.dp import get_dp_move_generator
 
 class DncOthelloUI(PyGameUI):
     def __init__(self):
         super().__init__()
-        pygame.display.set_caption("Othello - Divide & Conquer (Minimax)")
+        pygame.display.set_caption("Othello - Divide & Conquer vs DP (Minimax)")
+        self.use_dp = False # Toggle between standard D&C and DP
+        self.message = ""
+        self.message_timer = 0
+        self.dp_hit_count = 0
+        self.dp_hit_timer = 0
         
+    def show_message(self, text, duration=60):
+        self.message = text
+        self.message_timer = duration
+
     def update_ai(self):
 
         if not self.ai_generator:
-            self.ai_generator = get_dnc_move_generator(self.game_state, depth=3)
+            if self.use_dp:
+                self.ai_generator = get_dp_move_generator(self.game_state, depth=3)
+            else:
+                self.ai_generator = get_dnc_move_generator(self.game_state, depth=3)
             
         try:
             vis = next(self.ai_generator)
@@ -25,6 +38,13 @@ class DncOthelloUI(PyGameUI):
                 self.ai_generator = None
                 self.current_vis_data = None
                 self.play_sound('move')
+            elif vis['type'] == 'dp_hit':
+                 # Visual Feedback for DP Hit
+                 self.dp_hit_count += 1
+                 self.dp_hit_timer = 45 # Show for ~1.5 seconds
+                 self.current_vis_data = vis
+                 self.play_sound('flip')
+
             else:
                 self.current_vis_data = vis
         except StopIteration:
@@ -62,6 +82,14 @@ class DncOthelloUI(PyGameUI):
                         if event.key == pygame.K_e:
                             self.show_eval_bar = not self.show_eval_bar
                             self.play_sound('flip')
+
+                        if event.key == pygame.K_d:
+                            self.use_dp = not self.use_dp
+                            if self.use_dp:
+                                self.algo_mode = True
+                            mode_name = "DP Mode" if self.use_dp else "Standard D&C"
+                            self.show_message(f"Switched to {mode_name}")
+                            self.play_sound('flip')
                     
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         can_move = False
@@ -93,6 +121,12 @@ class DncOthelloUI(PyGameUI):
                 self.draw_menu()
             elif self.app_state == STATE_PLAYING:
                 self.draw_board()
+                
+                # Draw ephemeral message
+                if self.message_timer > 0:
+                    msg_surf = self.font_title.render(self.message, True, (255, 215, 0))
+                    self.screen.blit(msg_surf, (self.board_area_size//2 - msg_surf.get_width()//2, self.board_area_size//2))
+                    self.message_timer -= 1
                 
                 if self.game_mode == MODE_PvCPU and self.game_state.player == self.ai_player and not self.game_state.is_terminal():
                     if self.algo_mode:
@@ -151,6 +185,13 @@ class DncOthelloUI(PyGameUI):
         self.screen.blit(self.font_title.render(mode_txt, True, mode_col), (x + 140, y - 5))
         y += 40
         
+        # New DP Toggle
+        dp_txt = "ON" if self.use_dp else "OFF"
+        dp_col = (255, 215, 0) if self.use_dp else (100, 100, 100) # Gold for DP
+        self.screen.blit(self.font.render("DP Mode (D)", True, (200,200,200)), (x, y))
+        self.screen.blit(self.font_title.render(dp_txt, True, dp_col), (x + 140, y - 5))
+        y += 40
+        
         hm_txt = "ON" if self.heatmap_mode else "OFF"
         hm_col = (0, 255, 0) if self.heatmap_mode else (100, 100, 100)
         self.screen.blit(self.font.render("Heatmap (M)", True, (200,200,200)), (x, y))
@@ -171,6 +212,19 @@ class DncOthelloUI(PyGameUI):
         
         y += 170
         
+        # Check for DP Hit Visualization in Side Panel?
+        # Stats
+        self.screen.blit(self.font.render(f"DP Hits: {self.dp_hit_count}", True, (255, 215, 0)), (x, y))
+        y += 40
+        
+        # Check for DP Hit Visualization in Side Panel?
+        if self.dp_hit_timer > 0:
+             alpha = int(255 * (self.dp_hit_timer / 45)) if self.dp_hit_timer < 45 else 255
+             dp_hit_surf = self.font_title.render("DP HIT!", True, (255, 215, 0))
+             dp_hit_surf.set_alpha(alpha)
+             self.screen.blit(dp_hit_surf, (x, y))
+             self.dp_hit_timer -= 1
+
         if self.game_state.is_terminal():
             winner = self.game_state.get_winner()
             t = "Black Wins!" if winner==1 else "White Wins!" if winner==-1 else "Draw!"
