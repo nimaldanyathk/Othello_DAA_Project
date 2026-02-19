@@ -66,3 +66,63 @@ def evaluatemovevisual(board, moves, depth, playerturn, rootplayer, ismax):
     else:
         bestscore = max(opponentscores)
     return [(bestscore, move)]
+
+def choosebestmove(board, player, depth=3):
+    moves = board.get_valid_moves(player)
+    if not moves:
+        return None
+    scoredmoves = evaluatemove(board, moves, depth, player, player, ismax=True)
+    
+    def mergesort(arr):
+        if len(arr) <= 1:
+            return arr
+
+        mid = len(arr) // 2
+        left = mergesort(arr[:mid])
+        right = mergesort(arr[mid:])
+
+        return merge(left, right)
+    def merge(left, right):
+        result = []
+        i = j = 0
+
+        while i < len(left) and j < len(right):
+            if left[i][0] > right[j][0]:
+                result.append(left[i])
+                i += 1
+            else:
+                result.append(right[j])
+                j += 1
+
+        result.extend(left[i:])
+        result.extend(right[j:])
+        return result
+    scoredmoves = mergesort(scoredmoves)
+    if not scoredmoves:
+        return None        
+    bestscore, bestmove = scoredmoves[0]
+    return bestmove
+
+def choosebestmovevisual(board, player, depth=3):
+
+    moves = board.get_valid_moves(player)
+    
+    if not moves:
+        return
+    
+    scoredmoves = yield from evaluatemovevisual(board, moves, depth, player, player, ismax=True)
+    
+    scoredmoves.sort(key=lambda x: x[0], reverse=True)
+    
+    if not scoredmoves:
+        return
+        
+    bestscore, bestmove = scoredmoves[0]
+    newboard, _ = board.apply_move(bestmove[0], bestmove[1], player)
+    
+    from model.game_state import GameState
+    nextplayer = -player
+    resultstate = GameState(newboard, nextplayer)
+    
+    yield {'type': 'result', 'state': resultstate}
+
