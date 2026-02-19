@@ -42,6 +42,36 @@ def dfs_explore(start_state, max_depth=3):
                     visited.add(successor)
                     stack.append((successor, depth + 1))
 
+def merge_sort(arr, key=lambda x: x, reverse=False):
+    if len(arr) <= 1:
+        return arr
+    
+    mid = len(arr) // 2
+    left = merge_sort(arr[:mid], key, reverse)
+    right = merge_sort(arr[mid:], key, reverse)
+    
+    return merge(left, right, key, reverse)
+
+def merge(left, right, key, reverse):
+    result = []
+    i = j = 0
+    while i < len(left) and j < len(right):
+        val_l = key(left[i])
+        val_r = key(right[j])
+        
+        condition = (val_l > val_r) if reverse else (val_l < val_r)
+        
+        if condition:
+            result.append(left[i])
+            i += 1
+        else:
+            result.append(right[j])
+            j += 1
+    
+    result.extend(left[i:])
+    result.extend(right[j:])
+    return result
+
 def alpha_beta_generator(state, depth, alpha, beta, player, heuristic_func):
     """
     Generator version of Minimax with Alpha-Beta Pruning.
@@ -66,6 +96,16 @@ def alpha_beta_generator(state, depth, alpha, beta, player, heuristic_func):
         return val
 
     best_op = None
+
+    # --- Move Ordering (Manual Merge Sort) ---
+    # Sort successors to explore best moves first for better pruning.
+    if state.player == player: # Maximizer
+        # Sort by heuristic value appearing BEST for 'player' -> Descending
+        successors = merge_sort(successors, key=lambda s: heuristic_func(s.board, player), reverse=True)
+    else: # Minimizer
+        # Sort by heuristic value appearing WORST for 'player' (Best for opponent) -> Ascending
+        successors = merge_sort(successors, key=lambda s: heuristic_func(s.board, player), reverse=False)
+    # -----------------------------------------
 
     if state.player == player: # Maximizer
         value = float('-inf')
