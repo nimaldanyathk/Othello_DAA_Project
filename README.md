@@ -57,6 +57,8 @@ python main_terminal.py
 *   `main_terminal.py`: Entry point for the CLI game.
 *   `algorithms/`:
     *   `graph.py`: Search Algorithms (Minimax, Alpha-Beta) and visualization generators.
+    *   `dp.py`: Optimized Minimax with Memoization (Dynamic Programming).
+    *   `divide_and_conquer.py`: Pure Divide & Conquer implementation (Minimax Generator).
     *   `greedy.py`: Greedy strategy logic.
     *   `heuristics.py`: Board evaluation weights.
 *   `model/`:
