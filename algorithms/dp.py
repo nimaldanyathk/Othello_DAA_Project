@@ -24,7 +24,8 @@ def dp_minimax_generator(state, depth, player, heuristic_func, alpha, beta, memo
     # For simplicity here, we use exact depth as part of the key.
     
     grid_tuple = tuple(tuple(row) for row in state.board.grid)
-    state_key = (grid_tuple, state.player, depth)
+    # Remove depth → better memo reuse
+    state_key = (grid_tuple, state.player)
 
     # 2. Check Transposition Table (Memoization)
     if state_key in memo:
@@ -59,6 +60,10 @@ def dp_minimax_generator(state, depth, player, heuristic_func, alpha, beta, memo
         return score, None
 
     successors = state.get_successors()
+    #  Move ordering (add this block)
+    successors.sort(
+    key=lambda s: heuristic_func(s.board, player),
+    reverse=(state.player == player))
     
     # If no moves (Pass)
     if not successors:
