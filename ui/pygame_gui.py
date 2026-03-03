@@ -4,6 +4,9 @@ from model.board import Board
 from model.game_state import GameState
 from algorithms.graph import get_best_move_generator, weighted_heuristic
 from algorithms.heuristics import get_cell_weight
+from algorithms.greedy import get_greedy_move
+from algorithms.divide_and_conquer import choosebestmovevisual
+from algorithms.dp import get_dp_move_generator
 import os
 
 # Enums
@@ -14,6 +17,11 @@ STATE_GAME_OVER = 2
 # Game Modes
 MODE_PvCPU = 0
 MODE_PvP = 1
+
+# CPU Strategies
+STRAT_GREEDY = 0
+STRAT_DNC = 1
+STRAT_DP = 2
 
 class PyGameUI:
     # Constants
@@ -83,6 +91,7 @@ class PyGameUI:
         
         # Menu State
         self.selected_mode_option = MODE_PvCPU # Default
+        self.cpu_strategy = STRAT_DNC # Default strategy
         
         # Game State
         self.game_state = None
@@ -178,9 +187,34 @@ class PyGameUI:
             
             self.menu_buttons_mode.append((rect, mode_val))
 
-        # --- 2. Select Grid Size (Starts Game) ---
-        lbl_size = self.font.render("2. Start Game (Select Size):", True, (200, 200, 200))
-        self.screen.blit(lbl_size, (center_x - lbl_size.get_width()//2, 350))
+        # --- 2. Select CPU Strategy (If 1 Player) ---
+        lbl_strat = self.font.render("2. Select CPU Strategy (If 1 Player):", True, (200, 200, 200))
+        self.screen.blit(lbl_strat, (center_x - lbl_strat.get_width()//2, 300))
+        
+        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP)]
+        self.menu_buttons_strat = []
+        
+        strat_btn_width = 150
+        start_x_strat = center_x - (len(strats) * (strat_btn_width + 20)) // 2
+        
+        for i, (label, strat_val) in enumerate(strats):
+            x = start_x_strat + i * (strat_btn_width + 20)
+            y = 340
+            rect = pygame.Rect(x, y, strat_btn_width, 50)
+            
+            # Highlight selected
+            color = self.COLOR_BTN_SELECTED if self.cpu_strategy == strat_val else (200, 100, 100)
+            pygame.draw.rect(self.screen, color, rect, border_radius=5)
+            
+            # Text
+            txt = self.font.render(label, True, self.COLOR_WHITE)
+            self.screen.blit(txt, (x + strat_btn_width//2 - txt.get_width()//2, y + 25 - txt.get_height()//2))
+            
+            self.menu_buttons_strat.append((rect, strat_val))
+
+        # --- 3. Select Grid Size (Starts Game) ---
+        lbl_size = self.font.render("3. Start Game (Select Size):", True, (200, 200, 200))
+        self.screen.blit(lbl_size, (center_x - lbl_size.get_width()//2, 430))
         
         sizes = [4, 6, 8, 10]
         self.menu_buttons_size = []
@@ -188,7 +222,7 @@ class PyGameUI:
         
         for i, s in enumerate(sizes):
             x = start_x + i * 100
-            y = 390
+            y = 470
             rect = pygame.Rect(x, y, 80, 50)
             pygame.draw.rect(self.screen, self.COLOR_BTN_NORMAL, rect, border_radius=5)
             
@@ -202,6 +236,13 @@ class PyGameUI:
         for rect, mode_val in self.menu_buttons_mode:
             if rect.collidepoint(pos):
                 self.selected_mode_option = mode_val
+                self.play_sound('flip')
+                return
+
+        # Check Strategy Selection (Toggle)
+        for rect, strat_val in self.menu_buttons_strat:
+            if rect.collidepoint(pos):
+                self.cpu_strategy = strat_val
                 self.play_sound('flip')
                 return
 
@@ -366,6 +407,14 @@ class PyGameUI:
         y = 20
         
         mode_str = "1 PLAYER (CPU)" if self.game_mode == MODE_PvCPU else "2 PLAYERS (PvP)"
+        if self.game_mode == MODE_PvCPU:
+            if self.cpu_strategy == STRAT_GREEDY:
+                mode_str += " - GREEDY"
+            elif self.cpu_strategy == STRAT_DNC:
+                mode_str += " - D&C"
+            elif self.cpu_strategy == STRAT_DP:
+                mode_str += " - DP"
+        
         self.screen.blit(self.small_font.render(mode_str, True, (200, 200, 100)), (x, y))
         y += 40
         
@@ -427,7 +476,19 @@ class PyGameUI:
 
     def update_ai(self):
         if not self.ai_generator:
-            self.ai_generator = get_best_move_generator(self.game_state, depth=3)
+            if self.cpu_strategy == STRAT_GREEDY:
+                # Greedy Strategy doesn't have an iterative generator, make move immediately
+                best_state = get_greedy_move(self.game_state)
+                # Create a simple generator that yields the result
+                def greedy_gen():
+                    yield {'type': 'result', 'state': best_state}
+                self.ai_generator = greedy_gen()
+            elif self.cpu_strategy == STRAT_DNC:
+                self.ai_generator = choosebestmovevisual(self.game_state.board, self.game_state.player, depth=3)
+            elif self.cpu_strategy == STRAT_DP:
+                self.ai_generator = get_dp_move_generator(self.game_state, depth=3)
+            else:
+                self.ai_generator = get_best_move_generator(self.game_state, depth=3)
         try:
             vis = next(self.ai_generator)
             if vis['type'] == 'result':
@@ -439,6 +500,10 @@ class PyGameUI:
                 self.ai_generator = None
                 self.current_vis_data = None
                 self.play_sound('move')
+            elif vis['type'] == 'dp_hit':
+                 # Flash a message simply if needed or let data show it
+                 self.current_vis_data = vis
+                 # self.play_sound('flip')
             else:
                 self.current_vis_data = vis
                 # Optional: Play ticking sound for search?
@@ -447,6 +512,7 @@ class PyGameUI:
                      pass
         except StopIteration:
             self.ai_generator = None
+            self.current_vis_data = None
 
     def run(self):
         while self.running:
