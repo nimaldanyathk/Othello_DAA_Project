@@ -148,9 +148,9 @@ def get_best_move_generator(state, depth=3):
     # Use yield from to capture the return value (best_score, best_op)
     # while propagating all visualization dicts up.
     # Start with full alpha-beta window [-inf, +inf]
-    _, best_op = yield from alpha_beta_generator(state, depth, float('-inf'), float('inf'), state.player, weighted_heuristic)
+    best_score, best_op = yield from alpha_beta_generator(state, depth, float('-inf'), float('inf'), state.player, weighted_heuristic)
             
-    yield {'type': 'result', 'state': best_op}
+    yield {'type': 'result', 'state': best_op, 'score': best_score}
 
 def get_best_move(state, depth=3):
     """
