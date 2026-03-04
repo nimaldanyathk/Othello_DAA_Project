@@ -60,6 +60,7 @@ python main_terminal.py
     *   `dp.py`:Optimized Minimax with Memoization (Dynamic Programming).
     *   `divide_and_conquer.py`:Pure Divide & Conquer implementation (Minimax Generator).
     *   `greedy.py`: Greedy strategy logic.
+    *   `backtracking.py`: In-place Minimax search with backtracking.
     *   `heuristics.py`: Board evaluation weights.
 *   `model/`:
     *   `board.py`: Core game logic.
