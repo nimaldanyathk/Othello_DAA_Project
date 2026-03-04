@@ -140,3 +140,9 @@ flowchart TD
 3.  **Heuristics (Green):** When we can't search to the end, we estimate based on corners and mobility.
 4.  **Alpha-Beta Pruning (Orange):** We stop searching branches that are obviously worse than what we've already found.
 
+***
+
+<div align="center">
+  <img src="assets/oth.gif" alt="Othello AI Gameplay" width="600"/>
+</div>
+
