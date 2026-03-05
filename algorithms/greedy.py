@@ -44,3 +44,14 @@ def get_greedy_move(game_state):
             best_successor = GameState(new_board, -player)
             
     return best_successor
+
+def get_greedy_move_generator(game_state):
+    """
+    Generator wrapper for greedy to maintain interface parity with Minimax generators
+    for visualization and benchmarking.
+    """
+    yield {'type': 'search_node', 'state': game_state, 'depth': 1}
+    
+    best_state = get_greedy_move(game_state)
+    
+    yield {'type': 'result', 'state': best_state}
