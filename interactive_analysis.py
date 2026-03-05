@@ -6,7 +6,7 @@ Run:  python3 interactive_analysis.py
 import time
 import subprocess, sys
 import matplotlib
-matplotlib.use('MacOSX')
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from matplotlib.widgets import Slider, Button
