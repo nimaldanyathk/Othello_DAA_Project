@@ -7,6 +7,7 @@ from algorithms.heuristics import get_cell_weight
 from algorithms.greedy import get_greedy_move
 from algorithms.divide_and_conquer import choosebestmovevisual
 from algorithms.dp import get_dp_move_generator
+from algorithms.classical_backtracking import get_classical_bt_generator
 import os
 
 # Enums
@@ -22,6 +23,7 @@ MODE_PvP = 1
 STRAT_GREEDY = 0
 STRAT_DNC = 1
 STRAT_DP = 2
+STRAT_CLASSICAL_BT = 3
 
 class PyGameUI:
     # Constants
@@ -188,10 +190,12 @@ class PyGameUI:
             self.menu_buttons_mode.append((rect, mode_val))
 
         # --- 2. Select CPU Strategy (If 1 Player) ---
-        lbl_strat = self.font.render("2. Select CPU Strategy (If 1 Player):", True, (200, 200, 200))
+        is_1player = self.selected_mode_option == MODE_PvCPU
+        lbl_color = (200, 200, 200) if is_1player else (80, 80, 80)
+        lbl_strat = self.font.render("2. Select CPU Strategy (If 1 Player):", True, lbl_color)
         self.screen.blit(lbl_strat, (center_x - lbl_strat.get_width()//2, 300))
         
-        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP)]
+        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP), ("Classical BT", STRAT_CLASSICAL_BT)]
         self.menu_buttons_strat = []
         
         strat_btn_width = 150
@@ -202,15 +206,26 @@ class PyGameUI:
             y = 340
             rect = pygame.Rect(x, y, strat_btn_width, 50)
             
-            # Highlight selected
-            color = self.COLOR_BTN_SELECTED if self.cpu_strategy == strat_val else (200, 100, 100)
+            if not is_1player:
+                # Greyed out - not applicable in PvP mode
+                color = (60, 60, 60)
+            elif self.cpu_strategy == strat_val:
+                color = self.COLOR_BTN_SELECTED
+            else:
+                color = (200, 100, 100)
+            
             pygame.draw.rect(self.screen, color, rect, border_radius=5)
             
-            # Text
-            txt = self.font.render(label, True, self.COLOR_WHITE)
+            txt_color = (120, 120, 120) if not is_1player else self.COLOR_WHITE
+            txt = self.font.render(label, True, txt_color)
             self.screen.blit(txt, (x + strat_btn_width//2 - txt.get_width()//2, y + 25 - txt.get_height()//2))
             
             self.menu_buttons_strat.append((rect, strat_val))
+        
+        # "N/A" overlay text when in PvP mode
+        if not is_1player:
+            na = self.font.render("(Not applicable in 2 Player mode)", True, (100, 100, 100))
+            self.screen.blit(na, (center_x - na.get_width()//2, 400))
 
         # --- 3. Select Grid Size (Starts Game) ---
         lbl_size = self.font.render("3. Start Game (Select Size):", True, (200, 200, 200))
@@ -239,12 +254,13 @@ class PyGameUI:
                 self.play_sound('flip')
                 return
 
-        # Check Strategy Selection (Toggle)
-        for rect, strat_val in self.menu_buttons_strat:
-            if rect.collidepoint(pos):
-                self.cpu_strategy = strat_val
-                self.play_sound('flip')
-                return
+        # Check Strategy Selection (Toggle) - only in 1 Player mode
+        if self.selected_mode_option == MODE_PvCPU:
+            for rect, strat_val in self.menu_buttons_strat:
+                if rect.collidepoint(pos):
+                    self.cpu_strategy = strat_val
+                    self.play_sound('flip')
+                    return
 
         # Check Size Selection (Start Game)
         for rect, size in self.menu_buttons_size:
@@ -414,6 +430,8 @@ class PyGameUI:
                 mode_str += " - D&C"
             elif self.cpu_strategy == STRAT_DP:
                 mode_str += " - DP"
+            elif self.cpu_strategy == STRAT_CLASSICAL_BT:
+                mode_str += " - CLASSICAL BT"
         
         self.screen.blit(self.small_font.render(mode_str, True, (200, 200, 100)), (x, y))
         y += 40
@@ -487,6 +505,8 @@ class PyGameUI:
                 self.ai_generator = choosebestmovevisual(self.game_state.board, self.game_state.player, depth=3)
             elif self.cpu_strategy == STRAT_DP:
                 self.ai_generator = get_dp_move_generator(self.game_state, depth=3)
+            elif self.cpu_strategy == STRAT_CLASSICAL_BT:
+                self.ai_generator = get_classical_bt_generator(self.game_state)
             else:
                 self.ai_generator = get_best_move_generator(self.game_state, depth=3)
         try:
