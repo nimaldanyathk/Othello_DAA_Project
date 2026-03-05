@@ -3,7 +3,7 @@ import sys
 from ui.pygame_gui import PyGameUI, STATE_MENU, STATE_PLAYING, MODE_PvCPU, MODE_PvP
 from model.board import Board
 from model.game_state import GameState
-from algorithms.divide_and_conquer import choosebestmove, choosebestmovevisual, weighted_heuristic
+from algorithms.divide_and_conquer import choosebestmove, choosebestmovevisual
 
 class DncOthelloUI(PyGameUI):
     def __init__(self):
@@ -13,7 +13,7 @@ class DncOthelloUI(PyGameUI):
     def update_ai(self):
         if self.algo_mode:
             if not self.ai_generator:
-                self.ai_generator = choosebestmovevisual(self.game_state.board, self.game_state.player, depth=3)
+                self.ai_generator = choosebestmovevisual(self.game_state.board, self.game_state.player)
             
             try:
                 
@@ -22,7 +22,8 @@ class DncOthelloUI(PyGameUI):
                 if vis['type'] == 'result':
                     next_state = vis['state']
                     self.game_state = next_state
-                    self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
+                    b, w = self.game_state.board.get_counts()
+                    self.last_eval_score = b - w
                     self.play_sound('move')
                     self.ai_generator = None
                     self.current_vis_data = None
@@ -34,7 +35,7 @@ class DncOthelloUI(PyGameUI):
                 self.current_vis_data = None
                 
         else:
-            move = choosebestmove(self.game_state.board, self.game_state.player, depth=3)
+            move = choosebestmove(self.game_state.board, self.game_state.player)
             
             if move:
                 r, c = move
@@ -52,7 +53,8 @@ class DncOthelloUI(PyGameUI):
 
                      self.game_state = GameState(new_board, -self.game_state.player)
                 
-                self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
+                b, w = self.game_state.board.get_counts()
+                self.last_eval_score = b - w
                 self.play_sound('move')
 
     def run(self):
@@ -107,7 +109,8 @@ class DncOthelloUI(PyGameUI):
                                      for s in successors:
                                          if s.board.grid == new_board.grid:
                                              self.game_state = s
-                                             self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
+                                             b, w = self.game_state.board.get_counts()
+                                             self.last_eval_score = b - w
                                              break
                         
                         if hasattr(self, 'btn_restart') and self.btn_restart.collidepoint((mx, my)):
