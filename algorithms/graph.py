@@ -139,7 +139,7 @@ def alpha_beta_generator(state, depth, alpha, beta, player, heuristic_func):
                 break # Alpha Cutoff
         return value, best_op
 
-def get_best_move_generator(state, depth=3):
+def get_best_move_generator(state, depth=3, scale_factor=1.0):
     """
     Generator wrapper.
     Yields visualization data.
@@ -152,7 +152,7 @@ def get_best_move_generator(state, depth=3):
             
     yield {'type': 'result', 'state': best_op, 'score': best_score}
 
-def get_best_move(state, depth=3):
+def get_best_move(state, depth=3, scale_factor=1.0):
     """
     Backward compatibility wrapper.
     Consumes the generator and returns the final result.
