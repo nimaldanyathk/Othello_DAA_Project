@@ -9,7 +9,6 @@ from algorithms.heuristics import get_cell_weight
 from algorithms.greedy import get_greedy_move, get_greedy_move_generator
 from algorithms.divide_and_conquer import choosebestmovevisual
 from algorithms.dp import get_dp_move_generator
-from algorithms.classical_backtracking import get_classical_bt_generator
 from algorithms.backtracking import get_backtracking_move_generator
 import os
 
@@ -27,8 +26,7 @@ MODE_PvP = 1
 STRAT_GREEDY = 0
 STRAT_DNC = 1
 STRAT_DP = 2
-STRAT_CLASSICAL_BT = 3
-STRAT_BT = 4
+STRAT_BT = 3
 
 class PyGameUI:
     # Constants
@@ -205,7 +203,7 @@ class PyGameUI:
         lbl_strat = self.font.render("2. Select CPU Strategy (If 1 Player):", True, lbl_color)
         self.screen.blit(lbl_strat, (center_x - lbl_strat.get_width()//2, 300))
         
-        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP), ("Classical BT", STRAT_CLASSICAL_BT), ("Backtracking", STRAT_BT)]
+        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP), ("Backtracking", STRAT_BT)]
         self.menu_buttons_strat = []
         
         strat_btn_width = 150
@@ -665,19 +663,21 @@ class PyGameUI:
                 self.ai_generator = choosebestmovevisual(self.game_state.board, self.game_state.player, depth=3)
             elif self.cpu_strategy == STRAT_DP:
                 self.ai_generator = get_dp_move_generator(self.game_state, depth=3)
-            elif self.cpu_strategy == STRAT_CLASSICAL_BT:
-                self.ai_generator = get_classical_bt_generator(self.game_state)
             elif self.cpu_strategy == STRAT_BT:
-                # Backtracking mutates the board in-place — pass a copy.
+                # Pass a copy so the in-place algorithm does not mutate the live game state
                 bt_board = Board(self.game_state.board.grid, size=self.game_state.board.SIZE)
                 bt_state = GameState(board=bt_board, player=self.game_state.player)
-                self.ai_generator = get_backtracking_move_generator(bt_state, depth=3)
+                self.ai_generator = get_backtracking_move_generator(bt_state, depth=4)
             else:
                 self.ai_generator = get_best_move_generator(self.game_state, depth=3)
         try:
             vis = next(self.ai_generator)
             if vis['type'] == 'result':
-                self.game_state = vis['state']
+                # Force a copy of the board to prevent in-place algorithms from mutating the final state
+                final_state = vis['state']
+                final_board = Board(final_state.board.grid, size=final_state.board.SIZE)
+                from model.game_state import GameState
+                self.game_state = GameState(final_board, final_state.player)
                 
                 # Update Score for Eval Bar
                 self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
@@ -749,14 +749,10 @@ class PyGameUI:
                                      new_board, _ = self.game_state.board.apply_move(r, c, self.game_state.player)
                                      self.play_sound('move')
                                      
-                                     # Match successor
-                                     successors = self.game_state.get_successors()
-                                     for s in successors:
-                                         if s.board.grid == new_board.grid:
-                                             self.game_state = s
-                                             # Update Eval
-                                             self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
-                                             break
+                                     from model.game_state import GameState
+                                     self.game_state = GameState(new_board, -self.game_state.player)
+                                     self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
+                                     self.ai_generator = None  # Cancel any in-progress AI generator
                         
                         # Restart Button
                         if hasattr(self, 'btn_restart') and self.btn_restart.collidepoint((mx, my)):
@@ -779,7 +775,9 @@ class PyGameUI:
                     if self.algo_mode:
                         self.update_ai()
                     else:
-                        for _ in range(20): 
+                        # Speed up calculation significantly for Classical BT to prevent UI freezing
+                        steps_per_frame = 1000 if self.cpu_strategy == STRAT_CLASSICAL_BT else 20
+                        for _ in range(steps_per_frame): 
                             if self.game_state.player == self.ai_player:
                                 self.update_ai()
                             else:
