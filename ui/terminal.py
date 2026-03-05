@@ -8,6 +8,8 @@ class TerminalUI:
         self.game_state = GameState()
         self.ai_player = Board.WHITE 
         self.human_player = Board.BLACK
+        self.move_history = []
+
 
     def print_board(self):
         print("\n  " + " ".join([str(i) for i in range(8)]))
@@ -25,6 +27,9 @@ class TerminalUI:
         print(f"\nScore => Black: {b} | White: {w}")
         turn = "Black" if self.game_state.player == Board.BLACK else "White"
         print(f"Turn: {turn}")
+        if self.move_history:
+            recent = ", ".join([f"{p[0]}:({p[1]},{p[2]})" for p in self.move_history[-5:]])
+            print(f"Recent Moves: {recent}")
 
     def run(self):
         print("\033[H\033[J") # ANSI Clear Screen
@@ -81,10 +86,14 @@ class TerminalUI:
         # In our graph model, we just find the successor
         successors = self.game_state.get_successors()
         target_board, _ = self.game_state.board.apply_move(r, c, self.game_state.player)
+        payer_name = "B" if self.game_state.player == Board.BLACK else "W"
+        
         for s in successors:
             if s.board.grid == target_board.grid:
                 self.game_state = s
+                self.move_history.append((payer_name, r, c))
                 return
+
         print("Critical Error: Move not found in graph edges.")
 
     def _pass_turn(self):
