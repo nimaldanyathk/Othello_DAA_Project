@@ -10,7 +10,35 @@ from algorithms.greedy import get_greedy_move, get_greedy_move_generator
 from algorithms.divide_and_conquer import choosebestmovevisual
 from algorithms.dp import get_dp_move_generator
 from algorithms.backtracking import get_backtracking_move_generator
+from algorithms.backtracknoheuristic import evaluatemovevisual as noheur_evaluatemovevisual
+
 import os
+
+
+def get_backtracking_move_generator_noheur(game_state, depth=4):
+    """
+    Generator wrapper for the ui/pygame_gui.py integration.
+    """
+    player = game_state.player
+    board = game_state.board
+    
+    moves = board.get_valid_moves(player)
+    
+    if not moves:
+        yield {'type': 'result', 'state': game_state}
+        return
+        
+    scoredmoves = yield from noheur_evaluatemovevisual(board, moves, depth, player, player, True)
+    
+    scoredmoves.sort(key=lambda x: x[0], reverse=True)
+    bestscore, bestmove = scoredmoves[0]
+    
+    newboard, _ = board.apply_move(bestmove[0], bestmove[1], player)
+    nextplayer = -player
+    
+    resultstate = GameState(newboard, nextplayer)
+    yield {'type': 'result', 'state': resultstate, 'score': bestscore}
+
 
 # Enums
 STATE_MENU = 0
@@ -27,6 +55,8 @@ STRAT_GREEDY = 0
 STRAT_DNC = 1
 STRAT_DP = 2
 STRAT_BT = 3
+STRAT_BT_NO_HEURISTIC = 4
+
 
 class PyGameUI:
     # Constants
@@ -203,7 +233,7 @@ class PyGameUI:
         lbl_strat = self.font.render("2. Select CPU Strategy (If 1 Player):", True, lbl_color)
         self.screen.blit(lbl_strat, (center_x - lbl_strat.get_width()//2, 300))
         
-        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP), ("Backtracking", STRAT_BT)]
+        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP), ("Backtracking", STRAT_BT), ("Backtrack (No Heur)", STRAT_BT_NO_HEURISTIC)]
         self.menu_buttons_strat = []
         
         strat_btn_width = 150
@@ -590,6 +620,9 @@ class PyGameUI:
                 mode_str += " - CLASSICAL BT"
             elif self.cpu_strategy == STRAT_BT:
                 mode_str += " - BACKTRACKING"
+            elif self.cpu_strategy == STRAT_BT_NO_HEURISTIC:
+                mode_str += " - BT (NO HEUR)"
+
         
         self.screen.blit(self.small_font.render(mode_str, True, (200, 200, 100)), (x, y))
         y += 40
@@ -660,7 +693,7 @@ class PyGameUI:
                     yield {'type': 'result', 'state': best_state}
                 self.ai_generator = greedy_gen()
             elif self.cpu_strategy == STRAT_DNC:
-                self.ai_generator = choosebestmovevisual(self.game_state.board, self.game_state.player, depth=3)
+                self.ai_generator = choosebestmovevisual(self.game_state.board, self.game_state.player)
             elif self.cpu_strategy == STRAT_DP:
                 self.ai_generator = get_dp_move_generator(self.game_state, depth=3)
             elif self.cpu_strategy == STRAT_BT:
@@ -668,6 +701,11 @@ class PyGameUI:
                 bt_board = Board(self.game_state.board.grid, size=self.game_state.board.SIZE)
                 bt_state = GameState(board=bt_board, player=self.game_state.player)
                 self.ai_generator = get_backtracking_move_generator(bt_state, depth=4)
+            elif self.cpu_strategy == STRAT_BT_NO_HEURISTIC:
+                bt_board = Board(self.game_state.board.grid, size=self.game_state.board.SIZE)
+                bt_state = GameState(board=bt_board, player=self.game_state.player)
+                self.ai_generator = get_backtracking_move_generator_noheur(bt_state, depth=4)
+
             else:
                 self.ai_generator = get_best_move_generator(self.game_state, depth=3)
         try:
