@@ -127,7 +127,10 @@ class PyGameUI:
         self.heatmap_mode = False
         self.ai_generator = None
         self.current_vis_data = None
-        self.last_eval_score = 0
+        self.is_comparing = False
+        self.defer_benchmark = False
+        self.dropdown_open = False
+        self.dropdown_rect = pygame.Rect(0, 0, 0, 0)
         self.show_eval_bar = True
         
         self.running = True
@@ -222,33 +225,23 @@ class PyGameUI:
         lbl_strat = self.font.render("2. Select CPU Strategy (If 1 Player):", True, lbl_color)
         self.screen.blit(lbl_strat, (center_x - lbl_strat.get_width()//2, 300))
         
-        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP), ("Backtracking", STRAT_BT), ("Backtracking (No Heur)", STRAT_BT_NO_HEURISTIC)]
-        self.menu_buttons_strat = []
+        self.strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP), ("Backtracking", STRAT_BT), ("Backtracking (No Heur)", STRAT_BT_NO_HEURISTIC)]
         
-        strat_btn_width = 150
-        start_x_strat = center_x - (len(strats) * (strat_btn_width + 20)) // 2
+        # Dropdown closed state rendering
+        dd_width = 250
+        dd_x = center_x - dd_width // 2
+        dd_y = 340
+        self.btn_dropdown = pygame.Rect(dd_x, dd_y, dd_width, 50)
         
-        for i, (label, strat_val) in enumerate(strats):
-            x = start_x_strat + i * (strat_btn_width + 20)
-            y = 340
-            rect = pygame.Rect(x, y, strat_btn_width, 50)
-            
-            if not is_1player:
-                # Greyed out - not applicable in PvP mode
-                color = (60, 60, 60)
-            elif self.cpu_strategy == strat_val:
-                color = self.COLOR_BTN_SELECTED
-            else:
-                color = (200, 100, 100)
-            
-            pygame.draw.rect(self.screen, color, rect, border_radius=5)
-            
-            txt_color = (120, 120, 120) if not is_1player else self.COLOR_WHITE
-            txt = self.font.render(label, True, txt_color)
-            self.screen.blit(txt, (x + strat_btn_width//2 - txt.get_width()//2, y + 25 - txt.get_height()//2))
-            
-            self.menu_buttons_strat.append((rect, strat_val))
+        color = self.COLOR_BTN_NORMAL if is_1player else (60, 60, 60)
+        pygame.draw.rect(self.screen, color, self.btn_dropdown, border_radius=5)
         
+        current_name = next((name for name, val in self.strats if val == self.cpu_strategy), "Unknown")
+        txt_color = self.COLOR_WHITE if is_1player else (120, 120, 120)
+        txt = self.font.render(current_name + " \u25BC", True, txt_color)
+        self.screen.blit(txt, (dd_x + dd_width//2 - txt.get_width()//2, dd_y + 25 - txt.get_height()//2))
+        
+        # Removed dropdown open render from here to draw at the end
         # "N/A" overlay text when in PvP mode
         if not is_1player:
             na = self.font.render("(Not applicable in 2 Player mode)", True, (100, 100, 100))
@@ -280,20 +273,62 @@ class PyGameUI:
         txt = self.font.render("START GAME", True, self.COLOR_BLACK)
         self.screen.blit(txt, (self.btn_start.centerx - txt.get_width()//2, self.btn_start.centery - txt.get_height()//2))
 
+        # Render open dropdown on top of everything else
+        self.menu_buttons_strat = []
+        if self.dropdown_open and is_1player:
+            # Recreate variables since we moved this to end
+            dd_width = 250
+            dd_x = center_x - dd_width // 2
+            dd_y = 340
+            
+            self.dropdown_rect = pygame.Rect(dd_x, dd_y + 50, dd_width, len(self.strats) * 40)
+            
+            # Solid background with a slight shadow effect
+            shadow_rect = pygame.Rect(dd_x + 5, dd_y + 55, dd_width, len(self.strats) * 40)
+            pygame.draw.rect(self.screen, (20, 20, 30), shadow_rect, border_radius=5)
+            
+            pygame.draw.rect(self.screen, (40, 40, 60), self.dropdown_rect, border_radius=5)
+            pygame.draw.rect(self.screen, self.COLOR_WHITE, self.dropdown_rect, width=2, border_radius=5)
+            
+            for i, (label, strat_val) in enumerate(self.strats):
+                rect = pygame.Rect(dd_x, dd_y + 50 + i * 40, dd_width, 40)
+                
+                # Hover effect for dropdown items
+                mx, my = pygame.mouse.get_pos()
+                item_color = (70, 70, 100) if rect.collidepoint((mx, my)) else (40, 40, 60)
+                item_color = self.COLOR_BTN_SELECTED if self.cpu_strategy == strat_val else item_color
+                pygame.draw.rect(self.screen, item_color, rect)
+                
+                txt = self.small_font.render(label, True, self.COLOR_WHITE)
+                self.screen.blit(txt, (dd_x + 10, dd_y + 50 + i * 40 + 20 - txt.get_height()//2))
+                self.menu_buttons_strat.append((rect, strat_val))
+
+
 
     def handle_menu_click(self, pos):
+        # Handle dropdown open state first
+        if self.dropdown_open:
+            if self.selected_mode_option == MODE_PvCPU:
+                for rect, strat_val in self.menu_buttons_strat:
+                    if rect.collidepoint(pos):
+                        self.cpu_strategy = strat_val
+                        self.dropdown_open = False
+                        self.play_sound('flip')
+                        return
+            self.dropdown_open = False
+            return
+            
         for rect, mode_val in self.menu_buttons_mode:
             if rect.collidepoint(pos):
                 self.selected_mode_option = mode_val
                 self.play_sound('flip')
                 return
 
-        if self.selected_mode_option == MODE_PvCPU:
-            for rect, strat_val in self.menu_buttons_strat:
-                if rect.collidepoint(pos):
-                    self.cpu_strategy = strat_val
-                    self.play_sound('flip')
-                    return
+        if self.selected_mode_option == MODE_PvCPU and hasattr(self, 'btn_dropdown'):
+            if self.btn_dropdown.collidepoint(pos):
+                self.dropdown_open = not self.dropdown_open
+                self.play_sound('flip')
+                return
 
         for rect, size in self.menu_buttons_size:
             if rect.collidepoint(pos):

@@ -30,12 +30,6 @@ class GameState:
             else:
                 return [] # Terminal state
                 
-    def has_any_valid_moves(self):
-        # Quick check without generating all moves
-        return len(self.board.get_valid_moves(self.player)) > 0
-
-
-        successors = []
         successors = []
         for r, c in moves:
             # apply_move now returns (board, flipped_list)
@@ -43,6 +37,10 @@ class GameState:
             successors.append(GameState(new_board, -self.player))
         
         return successors
+
+    def has_any_valid_moves(self):
+        # Quick check without generating all moves
+        return len(self.board.get_valid_moves(self.player)) > 0
 
     def is_terminal(self):
         """
