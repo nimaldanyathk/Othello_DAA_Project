@@ -741,18 +741,12 @@ class PyGameUI:
             self.screen.blit(self.small_font.render(f"Eval: {sc}", True, col), (x + 50, y + 70))
         
         y += 170
-        
-        if self.game_state.is_terminal():
-            winner = self.game_state.get_winner()
-            t = "Black Wins!" if winner==1 else "White Wins!" if winner==-1 else "Draw!"
-            self.screen.blit(self.font_title.render(t, True, (255,255,0)), (x, y))
-            self.play_sound('win')
-
-        # Restart
+        # Surrender
         self.btn_restart = pygame.Rect(x, self.screen_height - 80, 160, 50)
         pygame.draw.rect(self.screen, (200, 50, 50), self.btn_restart, border_radius=5)
-        oms = self.font.render("MENU", True, self.COLOR_WHITE)
+        oms = self.font.render("SURRENDER", True, self.COLOR_WHITE)
         self.screen.blit(oms, (self.btn_restart.centerx - oms.get_width()//2, self.btn_restart.centery - oms.get_height()//2))
+
 
     def update_ai(self):
         if not self.ai_generator:
@@ -830,6 +824,14 @@ class PyGameUI:
                 elif self.app_state == STATE_COMPARE:
                     if event.type == pygame.MOUSEBUTTONDOWN:
                          self.handle_compare_click((mx, my))
+
+                elif self.app_state == STATE_GAME_OVER:
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                         if hasattr(self, 'btn_play_again') and self.btn_play_again.collidepoint((mx, my)):
+                             self.start_game(self.grid_size)
+                         elif hasattr(self, 'btn_quit') and self.btn_quit.collidepoint((mx, my)):
+                             self.app_state = STATE_MENU
+                             self.play_sound('flip')
                          
                 elif self.app_state == STATE_PLAYING:
                     if event.type == pygame.KEYDOWN:
@@ -907,6 +909,14 @@ class PyGameUI:
                                  
                                  self.game_state = succ[0]
                                  self.current_vis_data = None
+                                 
+                if self.app_state == STATE_PLAYING and self.game_state.is_terminal():
+                     self.app_state = STATE_GAME_OVER
+                     self.play_sound('win')
+
+            elif self.app_state == STATE_GAME_OVER:
+                self.draw_game_over()
+
 
             pygame.display.flip()
             self.clock.tick(30 if self.algo_mode else 60)
