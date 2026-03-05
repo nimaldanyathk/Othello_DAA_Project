@@ -65,11 +65,11 @@ class PyGameUI:
     BOARD_AREA_SIZE = 700
     
     # Colors - Distinct Palettes
-    COLOR_BG = (34, 139, 34) # Green Board
-    COLOR_BG_MENU = (40, 44, 52)
-    COLOR_LINE = (0, 0, 0)
-    COLOR_BLACK = (20, 20, 20)
-    COLOR_WHITE = (240, 240, 240)
+    COLOR_BG = (24, 119, 64) # Richer Green Board
+    COLOR_BG_MENU = (30, 34, 42)
+    COLOR_LINE = (10, 50, 20)
+    COLOR_BLACK = (15, 15, 15)
+    COLOR_WHITE = (245, 245, 245)
     
     COLOR_BTN_NORMAL = (100, 100, 200)
     COLOR_BTN_HOVER = (120, 120, 220)
@@ -522,12 +522,83 @@ class PyGameUI:
         radius = self.cell_size // 2 - 5
         color = self.COLOR_BLACK if player == Board.BLACK else self.COLOR_WHITE
         
+        if alpha == 255:
+            # Draw shadow
+            pygame.draw.circle(self.screen, (10, 40, 20), (x + 3, y + 3), radius)
+        
         if alpha < 255:
             s = pygame.Surface((self.cell_size, self.cell_size), pygame.SRCALPHA)
             pygame.draw.circle(s, color + (alpha,), (self.cell_size//2, self.cell_size//2), radius)
             self.screen.blit(s, (c*self.cell_size, r*self.cell_size))
         else:
             pygame.draw.circle(self.screen, color, (x, y), radius)
+            # Add highlight for 3D effect
+            highlight = (60, 60, 60) if player == Board.BLACK else (255, 255, 255)
+            pygame.draw.circle(self.screen, highlight, (int(x - radius*0.3), int(y - radius*0.3)), int(radius*0.2))
+
+    def draw_game_over(self):
+        # Draw the base board first under the overlay
+        self.draw_board()
+        
+        # Semi-transparent overlay
+        s = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        s.fill((0, 0, 0, 190)) # Dark overlay
+        self.screen.blit(s, (0, 0))
+        
+        center_x = self.screen_width // 2
+        center_y = self.screen_height // 2
+        
+        winner = self.game_state.get_winner()
+        b, w = self.game_state.board.get_counts()
+        
+        # Determine title text based on mode and winner
+        if winner == Board.BLACK:
+            if self.game_mode == MODE_PvCPU and self.human_player == Board.BLACK:
+                title_txt = "YOU WIN!"
+                color = (50, 255, 50)
+            elif self.game_mode == MODE_PvCPU:
+                title_txt = "CPU WINS!"
+                color = (255, 70, 70)
+            else:
+                title_txt = "BLACK WINS!"
+                color = (150, 150, 150)
+        elif winner == Board.WHITE:
+            if self.game_mode == MODE_PvCPU and self.human_player == Board.WHITE:
+                title_txt = "YOU WIN!"
+                color = (50, 255, 50)
+            elif self.game_mode == MODE_PvCPU:
+                title_txt = "CPU WINS!"
+                color = (255, 70, 70)
+            else:
+                title_txt = "WHITE WINS!"
+                color = (255, 255, 255)
+        else:
+            title_txt = "DRAW!"
+            color = (255, 255, 100)
+            
+        # Draw Title
+        title = self.font_title.render(title_txt, True, color)
+        # Add text shadow
+        shadow = self.font_title.render(title_txt, True, (0, 0, 0))
+        self.screen.blit(shadow, (center_x - title.get_width()//2 + 2, center_y - 120 + 2))
+        self.screen.blit(title, (center_x - title.get_width()//2, center_y - 120))
+        
+        # Draw Score
+        score_txt = self.font.render(f"Final Score - Black: {b} | White: {w}", True, self.COLOR_WHITE)
+        self.screen.blit(score_txt, (center_x - score_txt.get_width()//2, center_y - 40))
+        
+        # Play Again button
+        self.btn_play_again = pygame.Rect(center_x - 110, center_y + 30, 220, 50)
+        pygame.draw.rect(self.screen, (50, 200, 50), self.btn_play_again, border_radius=8)
+        txt = self.font.render("PLAY AGAIN", True, self.COLOR_BLACK)
+        self.screen.blit(txt, (self.btn_play_again.centerx - txt.get_width()//2, self.btn_play_again.centery - txt.get_height()//2))
+        
+        # Quit to Menu button
+        self.btn_quit = pygame.Rect(center_x - 110, center_y + 100, 220, 50)
+        pygame.draw.rect(self.screen, (200, 50, 50), self.btn_quit, border_radius=8)
+        txt = self.font.render("QUIT TO MENU", True, self.COLOR_WHITE)
+        self.screen.blit(txt, (self.btn_quit.centerx - txt.get_width()//2, self.btn_quit.centery - txt.get_height()//2))
+
 
     def _draw_user_visualization(self):
         mx, my = pygame.mouse.get_pos()
