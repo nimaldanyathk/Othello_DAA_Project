@@ -78,6 +78,12 @@ class PyGameUI:
     COLOR_NODE_LEAF = (0, 255, 255)
     
     def __init__(self):
+        # Pre-initialize mixer for better MP3 support
+        try:
+            pygame.mixer.pre_init(44100, -16, 2, 2048)
+        except:
+            pass
+            
         pygame.init()
         
         self.sound_enabled = False
@@ -101,13 +107,33 @@ class PyGameUI:
         
         self.sounds = {}
         if self.sound_enabled:
+            # We wrap the loading in a try block and check for path existence
+            # to prevent silent failures that disable the whole sound system.
             try:
-                self.sounds['move'] = pygame.mixer.Sound('assets/sounds/move.wav')
-                self.sounds['flip'] = pygame.mixer.Sound('assets/sounds/flip.wav')
-                self.sounds['win'] = pygame.mixer.Sound('assets/sounds/win.wav')
+                base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                bgm_path = os.path.join(base_dir, 'assets', 'sounds', 'Background Music.mp3')
+                
+                if os.path.exists(bgm_path):
+                    pygame.mixer.music.load(bgm_path)
+                    pygame.mixer.music.set_volume(0.3)
+                    pygame.mixer.music.play(-1)
+                
+                sound_files = {
+                    'move': os.path.join(base_dir, 'assets', 'sounds', 'Moves click.mp3'),
+                    'win': os.path.join(base_dir, 'assets', 'sounds', 'Won.mp3'),
+                    'loss': os.path.join(base_dir, 'assets', 'sounds', 'LOST.mp3'),
+                    'capture_more': os.path.join(base_dir, 'assets', 'sounds', 'Captured More.mp3'),
+                    'opp_capture_more': os.path.join(base_dir, 'assets', 'sounds', 'Opp captured more.mp3')
+                }
+                
+                for key, path in sound_files.items():
+                    if os.path.exists(path):
+                        self.sounds[key] = pygame.mixer.Sound(path)
+                    else:
+                        print(f"Warning: Missing sound file {path}")
+                        
             except Exception as e:
-                print(f"Warning: Sound loading failed - {e}")
-                self.sound_enabled = False
+                print(f"Warning: Secondary sound loading failed - {e}")
         
         self.clock = pygame.time.Clock()
         
@@ -643,10 +669,12 @@ class PyGameUI:
                 self.ai_generator = get_dp_move_generator(self.game_state, depth=3)
             elif self.cpu_strategy == STRAT_BT:
                 # Pass a copy so the in-place algorithm does not mutate the live game state
+                from model.game_state import GameState
                 bt_board = Board(self.game_state.board.grid, size=self.game_state.board.SIZE)
                 bt_state = GameState(board=bt_board, player=self.game_state.player)
                 self.ai_generator = get_backtracking_move_generator(bt_state, depth=4)
             elif self.cpu_strategy == STRAT_BT_NO_HEURISTIC:
+                from model.game_state import GameState
                 bt_board = Board(self.game_state.board.grid, size=self.game_state.board.SIZE)
                 bt_state = GameState(board=bt_board, player=self.game_state.player)
                 self.ai_generator = get_backtracking_move_generator_noheur(bt_state, depth=4)
@@ -659,6 +687,18 @@ class PyGameUI:
                 # Force a copy of the board to prevent in-place algorithms from mutating the final state
                 final_state = vis['state']
                 final_board = Board(final_state.board.grid, size=final_state.board.SIZE)
+                
+                # Check flipped count
+                ai = self.game_state.player
+                ai_before = sum(row.count(ai) for row in self.game_state.board.grid)
+                ai_after = sum(row.count(ai) for row in final_board.grid)
+                flipped_count = ai_after - ai_before - 1
+                
+                if flipped_count >= 8:
+                    self.play_sound('opp_capture_more')
+                else:
+                    self.play_sound('move')
+
                 from model.game_state import GameState
                 self.game_state = GameState(final_board, final_state.player)
                 
@@ -667,7 +707,6 @@ class PyGameUI:
                 
                 self.ai_generator = None
                 self.current_vis_data = None
-                self.play_sound('move')
             elif vis['type'] == 'dp_hit':
                  # Flash a message simply if needed or let data show it
                  self.current_vis_data = vis
@@ -733,8 +772,15 @@ class PyGameUI:
                              if mx < self.board_area_size:
                                  c, r = mx // self.cell_size, my // self.cell_size
                                  if self.game_state.board.is_valid_move(r, c, self.game_state.player):
-                                     new_board, _ = self.game_state.board.apply_move(r, c, self.game_state.player)
-                                     self.play_sound('move')
+                                     new_board, flipped = self.game_state.board.apply_move(r, c, self.game_state.player)
+                                     
+                                     if len(flipped) >= 8:
+                                         if self.game_state.player == self.human_player:
+                                             self.play_sound('capture_more')
+                                         else:
+                                             self.play_sound('opp_capture_more')
+                                     elif self.game_state.player != self.human_player:
+                                         self.play_sound('move')
                                      
                                      from model.game_state import GameState
                                      self.game_state = GameState(new_board, -self.game_state.player)
@@ -782,7 +828,19 @@ class PyGameUI:
                                  
                 if self.game_state.is_terminal() and self.app_state == STATE_PLAYING:
                      self.app_state = STATE_GAME_OVER
-                     self.play_sound('win')
+                     
+                     black_count = sum(row.count(Board.BLACK) for row in self.game_state.board.grid)
+                     white_count = sum(row.count(Board.WHITE) for row in self.game_state.board.grid)
+                     
+                     if self.game_mode == MODE_PvCPU:
+                         human_score = black_count if self.human_player == Board.BLACK else white_count
+                         cpu_score = white_count if self.human_player == Board.BLACK else black_count
+                         if human_score > cpu_score:
+                             self.play_sound('win')
+                         elif cpu_score > human_score:
+                             self.play_sound('loss')
+                     else:
+                         self.play_sound('win')
 
             elif self.app_state == STATE_GAME_OVER:
                 self.draw_game_over()
