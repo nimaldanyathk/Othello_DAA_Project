@@ -16,9 +16,6 @@ import os
 
 
 def get_backtracking_move_generator_noheur(game_state, depth=4):
-    """
-    Generator wrapper for the ui/pygame_gui.py integration.
-    """
     player = game_state.player
     board = game_state.board
     
@@ -44,7 +41,6 @@ def get_backtracking_move_generator_noheur(game_state, depth=4):
 STATE_MENU = 0
 STATE_PLAYING = 1
 STATE_GAME_OVER = 2
-STATE_COMPARE = 3
 
 # Game Modes
 MODE_PvCPU = 0
@@ -91,22 +87,18 @@ class PyGameUI:
         except (NotImplementedError, pygame.error) as e:
             print(f"Warning: Audio system unavailable - {e}")
         
-        # Default Size
         self.screen_width = 900
         self.screen_height = 700
         
-        # Use RESIZABLE instead of SCALED
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.RESIZABLE)
         pygame.display.set_caption("Othello - DAA Algorithm Visualization")
         
-        # Layout Variables
         self.board_area_size = 700
         self.cell_size = 80
         self.font_scale = 1.0
         
         self.calculate_layout(self.screen_width, self.screen_height)
         
-        # Load Sounds
         self.sounds = {}
         if self.sound_enabled:
             try:
@@ -115,36 +107,28 @@ class PyGameUI:
                 self.sounds['win'] = pygame.mixer.Sound('assets/sounds/win.wav')
             except Exception as e:
                 print(f"Warning: Sound loading failed - {e}")
-                self.sound_enabled = False # Disable if loading fails
+                self.sound_enabled = False
         
         self.clock = pygame.time.Clock()
         
-        # App State
         self.app_state = STATE_MENU
         self.grid_size = 8
         self.game_mode = MODE_PvCPU
         
-        # Menu State
-        self.selected_mode_option = MODE_PvCPU # Default
-        self.cpu_strategy = STRAT_DNC # Default strategy
+        self.selected_mode_option = MODE_PvCPU
+        self.cpu_strategy = STRAT_DNC
+        self.selected_grid_size = 8
         
-        # Game State
         self.game_state = None
         self.human_player = Board.BLACK
         self.ai_player = Board.WHITE
         
-        # Algo Mode
         self.algo_mode = False
         self.heatmap_mode = False
         self.ai_generator = None
         self.current_vis_data = None
         self.last_eval_score = 0
-        self.show_eval_bar = True # Toggle for Eval Bar
-        
-        # Comparison Mode
-        self.compare_results = None
-        self.is_comparing = False
-        self.defer_benchmark = False
+        self.show_eval_bar = True
         
         self.running = True
 
@@ -182,8 +166,14 @@ class PyGameUI:
         self.grid_size = size
         self.game_mode = self.selected_mode_option
         
-        # Re-initialize Board
         initial_board = Board(size=size)
+        
+        mid = size // 2
+        initial_board.grid[mid-1][mid-1] = Board.WHITE
+        initial_board.grid[mid][mid] = Board.WHITE
+        initial_board.grid[mid-1][mid] = Board.BLACK
+        initial_board.grid[mid][mid-1] = Board.BLACK
+        
         self.game_state = GameState(board=initial_board, player=Board.BLACK)
         self.app_state = STATE_PLAYING
         self.current_vis_data = None
@@ -191,7 +181,6 @@ class PyGameUI:
         self.last_eval_score = 0
         self.play_sound('move')
         
-        # Recalculate cell size
         self.calculate_layout(self.screen_width, self.screen_height)
 
     def draw_menu(self):
@@ -233,7 +222,7 @@ class PyGameUI:
         lbl_strat = self.font.render("2. Select CPU Strategy (If 1 Player):", True, lbl_color)
         self.screen.blit(lbl_strat, (center_x - lbl_strat.get_width()//2, 300))
         
-        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP), ("Backtracking", STRAT_BT), ("Backtrack (No Heur)", STRAT_BT_NO_HEURISTIC)]
+        strats = [("Greedy", STRAT_GREEDY), ("Divide & Conquer", STRAT_DNC), ("DP", STRAT_DP), ("Backtracking", STRAT_BT), ("Backtracking (No Heur)", STRAT_BT_NO_HEURISTIC)]
         self.menu_buttons_strat = []
         
         strat_btn_width = 150
@@ -265,8 +254,8 @@ class PyGameUI:
             na = self.font.render("(Not applicable in 2 Player mode)", True, (100, 100, 100))
             self.screen.blit(na, (center_x - na.get_width()//2, 400))
 
-        # --- 3. Select Grid Size (Starts Game) ---
-        lbl_size = self.font.render("3. Start Game (Select Size):", True, (200, 200, 200))
+        # --- 3. Select Grid Size ---
+        lbl_size = self.font.render("3. Select Size:", True, (200, 200, 200))
         self.screen.blit(lbl_size, (center_x - lbl_size.get_width()//2, 430))
         
         sizes = [4, 6, 8, 10]
@@ -277,31 +266,28 @@ class PyGameUI:
             x = start_x + i * 100
             y = 470
             rect = pygame.Rect(x, y, 80, 50)
-            pygame.draw.rect(self.screen, self.COLOR_BTN_NORMAL, rect, border_radius=5)
+            color = self.COLOR_BTN_SELECTED if getattr(self, 'selected_grid_size', 8) == s else self.COLOR_BTN_NORMAL
+            pygame.draw.rect(self.screen, color, rect, border_radius=5)
             
             txt = self.font.render(f"{s}x{s}", True, self.COLOR_WHITE)
             self.screen.blit(txt, (x + 40 - txt.get_width()//2, y + 25 - txt.get_height()//2))
             
             self.menu_buttons_size.append((rect, s))
 
-        # --- 4. Compare Algorithms ---
-        lbl_comp = self.font.render("4. Benchmarking:", True, (200, 200, 200))
-        self.screen.blit(lbl_comp, (center_x - lbl_comp.get_width()//2, 550))
-        
-        self.btn_compare = pygame.Rect(center_x - 125, 590, 250, 50)
-        pygame.draw.rect(self.screen, (200, 150, 50), self.btn_compare, border_radius=5)
-        txt = self.font.render("COMPARE ALGORITHMS", True, self.COLOR_BLACK)
-        self.screen.blit(txt, (self.btn_compare.centerx - txt.get_width()//2, self.btn_compare.centery - txt.get_height()//2))
+        # --- 4. Start Game Button ---
+        self.btn_start = pygame.Rect(center_x - 125, 560, 250, 50)
+        pygame.draw.rect(self.screen, (50, 200, 50), self.btn_start, border_radius=5)
+        txt = self.font.render("START GAME", True, self.COLOR_BLACK)
+        self.screen.blit(txt, (self.btn_start.centerx - txt.get_width()//2, self.btn_start.centery - txt.get_height()//2))
+
 
     def handle_menu_click(self, pos):
-        # Check Mode Selection (Toggle)
         for rect, mode_val in self.menu_buttons_mode:
             if rect.collidepoint(pos):
                 self.selected_mode_option = mode_val
                 self.play_sound('flip')
                 return
 
-        # Check Strategy Selection (Toggle) - only in 1 Player mode
         if self.selected_mode_option == MODE_PvCPU:
             for rect, strat_val in self.menu_buttons_strat:
                 if rect.collidepoint(pos):
@@ -309,16 +295,14 @@ class PyGameUI:
                     self.play_sound('flip')
                     return
 
-        # Check Size Selection (Start Game)
         for rect, size in self.menu_buttons_size:
             if rect.collidepoint(pos):
-                self.start_game(size)
+                self.selected_grid_size = size
+                self.play_sound('flip')
                 return
 
-        # Check Compare Selection - launches interactive_analysis.py
-        if hasattr(self, 'btn_compare') and self.btn_compare.collidepoint(pos):
-            subprocess.Popen([sys.executable, 'interactive_analysis.py'])
-            self.play_sound('flip')
+        if hasattr(self, 'btn_start') and self.btn_start.collidepoint(pos):
+            self.start_game(getattr(self, 'selected_grid_size', 8))
             return
 
     def play_sound(self, name):
@@ -327,139 +311,6 @@ class PyGameUI:
                 self.sounds[name].play()
             except:
                 pass
-
-    def draw_compare_screen(self):
-        self.screen.fill(self.COLOR_BG_MENU)
-        center_x = self.screen_width // 2
-        
-        title = self.font_title.render("ALGORITHM BENCHMARK (DEPTH 3)", True, self.COLOR_WHITE)
-        self.screen.blit(title, (center_x - title.get_width()//2, 40))
-        
-        # Back Button
-        self.btn_back = pygame.Rect(20, 20, 100, 40)
-        pygame.draw.rect(self.screen, (200, 50, 50), self.btn_back, border_radius=5)
-        txt = self.font.render("BACK", True, self.COLOR_WHITE)
-        self.screen.blit(txt, (self.btn_back.centerx - txt.get_width()//2, self.btn_back.centery - txt.get_height()//2))
-
-        if not self.is_comparing and not self.compare_results:
-            self.btn_run_bench = pygame.Rect(center_x - 125, 120, 250, 50)
-            pygame.draw.rect(self.screen, (50, 200, 50), self.btn_run_bench, border_radius=5)
-            txt = self.font.render("RUN BENCHMARK", True, self.COLOR_BLACK)
-            self.screen.blit(txt, (self.btn_run_bench.centerx - txt.get_width()//2, self.btn_run_bench.centery - txt.get_height()//2))
-            
-            desc = self.font.render("This will evaluate the Initial State using all AI strategies.", True, (150, 150, 150))
-            self.screen.blit(desc, (center_x - desc.get_width()//2, 180))
-            
-        elif self.is_comparing:
-            txt = self.font_title.render("RUNNING BENCHMARK... PLEASE WAIT", True, (255, 255, 0))
-            self.screen.blit(txt, (center_x - txt.get_width()//2, 120))
-            
-        elif self.compare_results:
-            self.btn_run_bench = pygame.Rect(center_x - 100, 100, 200, 40)
-            pygame.draw.rect(self.screen, (50, 200, 50), self.btn_run_bench, border_radius=5)
-            txt = self.font.render("RE-RUN", True, self.COLOR_BLACK)
-            self.screen.blit(txt, (self.btn_run_bench.centerx - txt.get_width()//2, self.btn_run_bench.centery - txt.get_height()//2))
-            
-            self._draw_compare_charts()
-
-    def handle_compare_click(self, pos):
-        if hasattr(self, 'btn_back') and self.btn_back.collidepoint(pos):
-             self.app_state = STATE_MENU
-             self.play_sound('flip')
-             return
-             
-        if not self.is_comparing:
-             if hasattr(self, 'btn_run_bench') and self.btn_run_bench.collidepoint(pos):
-                  self.is_comparing = True
-                  self.play_sound('flip')
-                  self.defer_benchmark = True
-
-    def run_comparison_benchmark(self):
-        depth = 3
-        
-        algorithms = [
-            ("Greedy", get_greedy_move_generator, True),
-            ("Backtracking", get_backtracking_move_generator, False),
-            ("Minimax", get_best_move_generator, False),
-            ("DP Minimax", get_dp_move_generator, False)
-        ]
-        
-        results = []
-        for name, gen_func, is_greedy in algorithms:
-            state = GameState()
-            gen = gen_func(state) if is_greedy else gen_func(state, depth=depth)
-            
-            nodes = 0
-            start_t = time.time()
-            try:
-                for evt in gen:
-                    if evt['type'] in ('search_node', 'leaf'):
-                        nodes += 1
-            except StopIteration:
-                pass
-            duration = time.time() - start_t
-            
-            results.append({
-                "name": name,
-                "time": duration,
-                "nodes": nodes
-            })
-            
-        self.compare_results = results
-        self.is_comparing = False
-        self.defer_benchmark = False
-
-    def _draw_compare_charts(self):
-        if not self.compare_results: return
-        
-        # Adjust dynamic sizing
-        margin_x = 50
-        start_y = 180
-        chart_w = self.screen_width - 2 * margin_x
-        # Make charts responsive to screen height
-        chart_h = max(100, (self.screen_height - start_y - 120) // 2)
-        
-        names = [r["name"] for r in self.compare_results]
-        times = [r["time"] for r in self.compare_results]
-        nodes = [r["nodes"] for r in self.compare_results]
-        
-        colors = [(200, 50, 50), (200, 150, 50), (50, 50, 200), (50, 200, 50)]
-        max_time = max(times) if max(times) > 0 else 0.001
-        max_nodes = max(nodes) if max(nodes) > 0 else 1
-        
-        bar_w = chart_w // (len(names) * 3)
-        spacing = chart_w / len(names)
-        
-        # Draw Time Chart
-        lbl = self.font_title.render("Execution Time (Seconds) - Lower is Better", True, self.COLOR_WHITE)
-        self.screen.blit(lbl, (margin_x, start_y - 30))
-        pygame.draw.line(self.screen, self.COLOR_WHITE, (margin_x, start_y + chart_h), (margin_x + chart_w, start_y + chart_h), 2)
-        
-        for i, res in enumerate(self.compare_results):
-            x = margin_x + i * spacing + (spacing - bar_w) // 2
-            h = (res["time"] / max_time) * chart_h
-            y = start_y + chart_h - h
-            pygame.draw.rect(self.screen, colors[i % len(colors)], (x, y, bar_w, h))
-            txt = self.font.render(f"{res['time']:.3f}s", True, self.COLOR_WHITE)
-            self.screen.blit(txt, (x + bar_w//2 - txt.get_width()//2, max(y - 25, start_y)))
-            n_txt = self.small_font.render(res["name"], True, self.COLOR_WHITE)
-            self.screen.blit(n_txt, (x + bar_w//2 - n_txt.get_width()//2, start_y + chart_h + 10))
-            
-        # Draw Node Chart
-        start_y_nodes = start_y + chart_h + 60
-        lbl = self.font_title.render("Nodes Visited (Lower is Better)", True, self.COLOR_WHITE)
-        self.screen.blit(lbl, (margin_x, start_y_nodes - 30))
-        pygame.draw.line(self.screen, self.COLOR_WHITE, (margin_x, start_y_nodes + chart_h), (margin_x + chart_w, start_y_nodes + chart_h), 2)
-        
-        for i, res in enumerate(self.compare_results):
-            x = margin_x + i * spacing + (spacing - bar_w) // 2
-            h = (res["nodes"] / max_nodes) * chart_h
-            y = start_y_nodes + chart_h - h
-            pygame.draw.rect(self.screen, colors[i % len(colors)], (x, y, bar_w, h))
-            txt = self.font.render(f"{res['nodes']}", True, self.COLOR_WHITE)
-            self.screen.blit(txt, (x + bar_w//2 - txt.get_width()//2, max(y - 25, start_y_nodes)))
-            n_txt = self.small_font.render(res["name"], True, self.COLOR_WHITE)
-            self.screen.blit(n_txt, (x + bar_w//2 - n_txt.get_width()//2, start_y_nodes + chart_h + 10))
 
     def draw_board(self):
         self.screen.fill(self.COLOR_BG)
@@ -687,12 +538,10 @@ class PyGameUI:
                 mode_str += " - D&C"
             elif self.cpu_strategy == STRAT_DP:
                 mode_str += " - DP"
-            elif self.cpu_strategy == STRAT_CLASSICAL_BT:
-                mode_str += " - CLASSICAL BT"
             elif self.cpu_strategy == STRAT_BT:
                 mode_str += " - BACKTRACKING"
             elif self.cpu_strategy == STRAT_BT_NO_HEURISTIC:
-                mode_str += " - BT (NO HEUR)"
+                mode_str += " - BACKTRACK (NO HEUR)"
 
         
         self.screen.blit(self.small_font.render(mode_str, True, (200, 200, 100)), (x, y))
@@ -712,16 +561,12 @@ class PyGameUI:
         
         mode_txt = "ON" if self.algo_mode else "OFF"
         mode_col = (0, 255, 0) if self.algo_mode else (100, 100, 100)
-        mode_txt = "ON" if self.algo_mode else "OFF"
-        mode_col = (0, 255, 0) if self.algo_mode else (100, 100, 100)
         self.screen.blit(self.font.render("Algo View (A)", True, (200,200,200)), (x, y))
         self.screen.blit(self.font_title.render(mode_txt, True, mode_col), (x + 140, y - 5))
         y += 40
         
         hm_txt = "ON" if self.heatmap_mode else "OFF"
         hm_col = (0, 255, 0) if self.heatmap_mode else (100, 100, 100)
-        self.screen.blit(self.font.render("Heatmap (H)", True, (200,200,200)), (x, y))
-        self.screen.blit(self.font_title.render(hm_txt, True, hm_col), (x + 140, y - 5))
         self.screen.blit(self.font.render("Heatmap (H)", True, (200,200,200)), (x, y))
         self.screen.blit(self.font_title.render(hm_txt, True, hm_col), (x + 140, y - 5))
         y += 40
@@ -820,10 +665,6 @@ class PyGameUI:
                 if self.app_state == STATE_MENU:
                     if event.type == pygame.MOUSEBUTTONDOWN:
                          self.handle_menu_click((mx, my))
-                         
-                elif self.app_state == STATE_COMPARE:
-                    if event.type == pygame.MOUSEBUTTONDOWN:
-                         self.handle_compare_click((mx, my))
 
                 elif self.app_state == STATE_GAME_OVER:
                     if event.type == pygame.MOUSEBUTTONDOWN:
@@ -870,14 +711,8 @@ class PyGameUI:
                              self.app_state = STATE_MENU
                              self.play_sound('flip')
 
-            # Render
             if self.app_state == STATE_MENU:
                 self.draw_menu()
-            elif self.app_state == STATE_COMPARE:
-                self.draw_compare_screen()
-                if self.defer_benchmark:
-                    pygame.display.flip()
-                    self.run_comparison_benchmark()
             elif self.app_state == STATE_PLAYING:
                 self.draw_board()
                 
@@ -887,7 +722,7 @@ class PyGameUI:
                         self.update_ai()
                     else:
                         # Speed up calculation significantly for Classical BT to prevent UI freezing
-                        steps_per_frame = 1000 if self.cpu_strategy == STRAT_CLASSICAL_BT else 20
+                        steps_per_frame = 1000 if self.cpu_strategy == STRAT_BT else 20
                         for _ in range(steps_per_frame): 
                             if self.game_state.player == self.ai_player:
                                 self.update_ai()
@@ -910,7 +745,7 @@ class PyGameUI:
                                  self.game_state = succ[0]
                                  self.current_vis_data = None
                                  
-                if self.app_state == STATE_PLAYING and self.game_state.is_terminal():
+                if self.game_state.is_terminal() and self.app_state == STATE_PLAYING:
                      self.app_state = STATE_GAME_OVER
                      self.play_sound('win')
 
