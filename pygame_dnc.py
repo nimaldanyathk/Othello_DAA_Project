@@ -3,52 +3,57 @@ import sys
 from ui.pygame_gui import PyGameUI, STATE_MENU, STATE_PLAYING, MODE_PvCPU, MODE_PvP
 from model.board import Board
 from model.game_state import GameState
-from algorithms.divide_and_conquer import get_dnc_move_generator, weighted_heuristic
-from algorithms.dp import get_dp_move_generator
+from algorithms.divide_and_conquer import choosebestmove, choosebestmovevisual, weighted_heuristic
 
 class DncOthelloUI(PyGameUI):
     def __init__(self):
         super().__init__()
-        pygame.display.set_caption("Othello - Divide & Conquer vs DP (Minimax)")
-        self.use_dp = False # Toggle between standard D&C and DP
-        self.message = ""
-        self.message_timer = 0
-        self.dp_hit_count = 0
-        self.dp_hit_timer = 0
+        pygame.display.set_caption("Othello - Divide & Conquer (Minimax)")
         
-    def show_message(self, text, duration=60):
-        self.message = text
-        self.message_timer = duration
-
     def update_ai(self):
-
-        if not self.ai_generator:
-            if self.use_dp:
-                self.ai_generator = get_dp_move_generator(self.game_state, depth=3)
-            else:
-                self.ai_generator = get_dnc_move_generator(self.game_state, depth=3)
+        if self.algo_mode:
+            if not self.ai_generator:
+                self.ai_generator = choosebestmovevisual(self.game_state.board, self.game_state.player, depth=3)
             
-        try:
-            vis = next(self.ai_generator)
-            if vis['type'] == 'result':
-                self.game_state = vis['state']
+            try:
                 
-                self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
+                vis = next(self.ai_generator)
                 
+                if vis['type'] == 'result':
+                    next_state = vis['state']
+                    self.game_state = next_state
+                    self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
+                    self.play_sound('move')
+                    self.ai_generator = None
+                    self.current_vis_data = None
+                else:
+                    self.current_vis_data = vis
+                    
+            except StopIteration:
                 self.ai_generator = None
                 self.current_vis_data = None
-                self.play_sound('move')
-            elif vis['type'] == 'dp_hit':
-                 # Visual Feedback for DP Hit
-                 self.dp_hit_count += 1
-                 self.dp_hit_timer = 45 # Show for ~1.5 seconds
-                 self.current_vis_data = vis
-                 self.play_sound('flip')
+                
+        else:
+            move = choosebestmove(self.game_state.board, self.game_state.player, depth=3)
+            
+            if move:
+                r, c = move
+                new_board, _ = self.game_state.board.apply_move(r, c, self.game_state.player)
+                
+                successors = self.game_state.get_successors()
+                found = False
+                for s in successors:
+                     if s.board.grid == new_board.grid:
+                         self.game_state = s
+                         found = True
+                         break
+                
+                if not found:
 
-            else:
-                self.current_vis_data = vis
-        except StopIteration:
-            self.ai_generator = None
+                     self.game_state = GameState(new_board, -self.game_state.player)
+                
+                self.last_eval_score = weighted_heuristic(self.game_state.board, Board.BLACK)
+                self.play_sound('move')
 
     def run(self):
 
@@ -82,14 +87,6 @@ class DncOthelloUI(PyGameUI):
                         if event.key == pygame.K_e:
                             self.show_eval_bar = not self.show_eval_bar
                             self.play_sound('flip')
-
-                        if event.key == pygame.K_d:
-                            self.use_dp = not self.use_dp
-                            if self.use_dp:
-                                self.algo_mode = True
-                            mode_name = "DP Mode" if self.use_dp else "Standard D&C"
-                            self.show_message(f"Switched to {mode_name}")
-                            self.play_sound('flip')
                     
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         can_move = False
@@ -122,21 +119,8 @@ class DncOthelloUI(PyGameUI):
             elif self.app_state == STATE_PLAYING:
                 self.draw_board()
                 
-                # Draw ephemeral message
-                if self.message_timer > 0:
-                    msg_surf = self.font_title.render(self.message, True, (255, 215, 0))
-                    self.screen.blit(msg_surf, (self.board_area_size//2 - msg_surf.get_width()//2, self.board_area_size//2))
-                    self.message_timer -= 1
-                
                 if self.game_mode == MODE_PvCPU and self.game_state.player == self.ai_player and not self.game_state.is_terminal():
-                    if self.algo_mode:
-                        self.update_ai()
-                    else:
-                        for _ in range(20): 
-                            if self.game_state.player == self.ai_player:
-                                self.update_ai()
-                            else:
-                                break
+                    self.update_ai()
 
                 if self.game_mode == MODE_PvP or (self.game_mode == MODE_PvCPU and self.game_state.player == self.human_player):
                      if not self.game_state.is_terminal():
@@ -185,13 +169,6 @@ class DncOthelloUI(PyGameUI):
         self.screen.blit(self.font_title.render(mode_txt, True, mode_col), (x + 140, y - 5))
         y += 40
         
-        # New DP Toggle
-        dp_txt = "ON" if self.use_dp else "OFF"
-        dp_col = (255, 215, 0) if self.use_dp else (100, 100, 100) # Gold for DP
-        self.screen.blit(self.font.render("DP Mode (D)", True, (200,200,200)), (x, y))
-        self.screen.blit(self.font_title.render(dp_txt, True, dp_col), (x + 140, y - 5))
-        y += 40
-        
         hm_txt = "ON" if self.heatmap_mode else "OFF"
         hm_col = (0, 255, 0) if self.heatmap_mode else (100, 100, 100)
         self.screen.blit(self.font.render("Heatmap (M)", True, (200,200,200)), (x, y))
@@ -212,26 +189,12 @@ class DncOthelloUI(PyGameUI):
         
         y += 170
         
-        # Check for DP Hit Visualization in Side Panel?
-        # Stats
-        self.screen.blit(self.font.render(f"DP Hits: {self.dp_hit_count}", True, (255, 215, 0)), (x, y))
-        y += 40
-        
-        # Check for DP Hit Visualization in Side Panel?
-        if self.dp_hit_timer > 0:
-             alpha = int(255 * (self.dp_hit_timer / 45)) if self.dp_hit_timer < 45 else 255
-             dp_hit_surf = self.font_title.render("DP HIT!", True, (255, 215, 0))
-             dp_hit_surf.set_alpha(alpha)
-             self.screen.blit(dp_hit_surf, (x, y))
-             self.dp_hit_timer -= 1
-
         if self.game_state.is_terminal():
             winner = self.game_state.get_winner()
             t = "Black Wins!" if winner==1 else "White Wins!" if winner==-1 else "Draw!"
             self.screen.blit(self.font_title.render(t, True, (255,255,0)), (x, y))
             self.play_sound('win')
 
-        # Restart
         self.btn_restart = pygame.Rect(x, self.screen_height - 80, 160, 50)
         pygame.draw.rect(self.screen, (200, 50, 50), self.btn_restart, border_radius=5)
         oms = self.font.render("MENU", True, self.COLOR_WHITE)

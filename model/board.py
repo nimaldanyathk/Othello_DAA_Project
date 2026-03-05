@@ -126,6 +126,48 @@ class Board:
                     
         return new_board, all_flipped
 
+    def apply_move_in_place(self, r, c, player):
+        """
+        Applies a move directly to this board instance without copying.
+        Returns a list of flipped cell coordinates to allow undoing.
+        """
+        self.grid[r][c] = player
+        
+        opponent = -player
+        directions = [
+            (-1, -1), (-1, 0), (-1, 1),
+            (0, -1),           (0, 1),
+            (1, -1),  (1, 0),  (1, 1)
+        ]
+        
+        all_flipped = []
+
+        for dr, dc in directions:
+            nr, nc = r + dr, c + dc
+            to_flip = []
+            
+            while self.is_on_board(nr, nc) and self.grid[nr][nc] == opponent:
+                to_flip.append((nr, nc))
+                nr += dr
+                nc += dc
+            
+            # If we sandwich opponent pieces with our own
+            if self.is_on_board(nr, nc) and self.grid[nr][nc] == player:
+                for fr, fc in to_flip:
+                    self.grid[fr][fc] = player
+                all_flipped.extend(to_flip)
+                    
+        return all_flipped
+
+    def undo_move(self, r, c, player, flipped_cells):
+        """
+        Reverts a move that was applied in-place.
+        """
+        self.grid[r][c] = self.EMPTY
+        opponent = -player
+        for fr, fc in flipped_cells:
+            self.grid[fr][fc] = opponent
+
     def get_counts(self):
         black = sum(row.count(self.BLACK) for row in self.grid)
         white = sum(row.count(self.WHITE) for row in self.grid)

@@ -60,6 +60,7 @@ python main_terminal.py
     *   `dp.py`: Optimized Minimax with Memoization (Dynamic Programming).
     *   `divide_and_conquer.py`: Pure Divide & Conquer implementation (Minimax Generator).
     *   `greedy.py`: Greedy strategy logic.
+    *   `backtracking.py`: In-place Minimax search with backtracking.
     *   `heuristics.py`: Board evaluation weights.
 *   `model/`:
     *   `board.py`: Core game logic.
@@ -138,4 +139,10 @@ flowchart TD
     *   *Visualization:* Look for "DP HIT!" in the side panel.
 3.  **Heuristics (Green):** When we can't search to the end, we estimate based on corners and mobility.
 4.  **Alpha-Beta Pruning (Orange):** We stop searching branches that are obviously worse than what we've already found.
+
+***
+
+<div align="center">
+  <img src="assets/oth.gif" alt="Othello AI Gameplay" width="600"/>
+</div>
 
