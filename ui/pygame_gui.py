@@ -111,26 +111,35 @@ class PyGameUI:
             # to prevent silent failures that disable the whole sound system.
             try:
                 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                bgm_path = os.path.join(base_dir, 'assets', 'sounds', 'Background Music.mp3')
-                
-                if os.path.exists(bgm_path):
+                sounds_dir = os.path.join(base_dir, 'assets', 'sounds')
+
+                def find_sound(ogg_name, mp3_name):
+                    # OGG works everywhere (including the web build); MP3 is the fallback
+                    for name in (ogg_name, mp3_name):
+                        path = os.path.join(sounds_dir, name)
+                        if os.path.exists(path):
+                            return path
+                    return None
+
+                bgm_path = find_sound('background_music.ogg', 'Background Music.mp3')
+                if bgm_path:
                     pygame.mixer.music.load(bgm_path)
                     pygame.mixer.music.set_volume(0.3)
                     pygame.mixer.music.play(-1)
-                
+
                 sound_files = {
-                    'move': os.path.join(base_dir, 'assets', 'sounds', 'Moves click.mp3'),
-                    'win': os.path.join(base_dir, 'assets', 'sounds', 'Won.mp3'),
-                    'loss': os.path.join(base_dir, 'assets', 'sounds', 'LOST.mp3'),
-                    'capture_more': os.path.join(base_dir, 'assets', 'sounds', 'Captured More.mp3'),
-                    'opp_capture_more': os.path.join(base_dir, 'assets', 'sounds', 'Opp captured more.mp3')
+                    'move': find_sound('moves_click.ogg', 'Moves click.mp3'),
+                    'win': find_sound('won.ogg', 'Won.mp3'),
+                    'loss': find_sound('lost.ogg', 'LOST.mp3'),
+                    'capture_more': find_sound('captured_more.ogg', 'Captured More.mp3'),
+                    'opp_capture_more': find_sound('opp_captured_more.ogg', 'Opp captured more.mp3')
                 }
-                
+
                 for key, path in sound_files.items():
-                    if os.path.exists(path):
+                    if path:
                         self.sounds[key] = pygame.mixer.Sound(path)
                     else:
-                        print(f"Warning: Missing sound file {path}")
+                        print(f"Warning: Missing sound file for '{key}'")
                         
             except Exception as e:
                 print(f"Warning: Secondary sound loading failed - {e}")
