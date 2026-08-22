@@ -2,6 +2,12 @@
 
 A Python implementation of the classic board game **Othello (Reversi)**
 
+## 🎮 Play in your browser
+
+**[▶ Play now](https://nimaldanyathk.github.io/Othello_DAA_Project/)** — no installation needed.
+
+The game runs directly in the browser via [pygbag](https://pypi.org/project/pygbag/) (Python compiled to WebAssembly). The first load downloads the Python runtime (~15 MB), so give it a few seconds, then click once to start.
+
 ## Features
 
 *   **Game Modes:** 1 Player (vs AI) and 2 Players (PvP).
@@ -50,6 +56,16 @@ Simple text-based interface.
 ```bash
 python main_terminal.py
 ```
+
+### Web Version (rebuild)
+The playable browser build lives in `docs/` and is served by GitHub Pages. To rebuild it after changing the code:
+
+```bash
+pip install pygbag
+python -m pygbag --build --title "Othello - DAA Project" main.py
+```
+
+Then replace the contents of `docs/` with `build/web/` and push. Note: `main.py` is the web entry point; when testing a build locally, open it via `http://127.0.0.1:<port>` (not `localhost`, which triggers pygbag's dev-server mode).
 
 ## Project Structure
 
