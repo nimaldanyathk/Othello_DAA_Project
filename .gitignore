@@ -7,3 +7,5 @@ generate_report.py
 PROJECT_REPORT.md
 Othello_Project_Report.docx
 generate_report.py
+
+build/
