@@ -1,7 +1,5 @@
 import pygame
-import sys
-import subprocess
-import time
+import asyncio
 from model.board import Board
 from model.game_state import GameState
 from algorithms.graph import get_best_move_generator, weighted_heuristic
@@ -167,7 +165,9 @@ class PyGameUI:
         self.dropdown_open = False
         self.dropdown_rect = pygame.Rect(0, 0, 0, 0)
         self.show_eval_bar = True
-        
+        self.pass_pending_state = None
+        self.pass_notice_until = 0
+
         self.running = True
 
     def calculate_layout(self, w, h):
@@ -216,6 +216,7 @@ class PyGameUI:
         self.app_state = STATE_PLAYING
         self.current_vis_data = None
         self.ai_generator = None
+        self.pass_pending_state = None
         self.last_eval_score = 0
         self.play_sound('move')
         
@@ -730,7 +731,7 @@ class PyGameUI:
             self.ai_generator = None
             self.current_vis_data = None
 
-    def run(self):
+    async def run_async(self):
         while self.running:
             mx, my = pygame.mouse.get_pos()
             
@@ -740,7 +741,10 @@ class PyGameUI:
                     
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_f:
-                        pygame.display.toggle_fullscreen()
+                        try:
+                            pygame.display.toggle_fullscreen()
+                        except pygame.error:
+                            pass  # Not supported in the browser build
 
                 if event.type == pygame.VIDEORESIZE:
                     self.calculate_layout(event.w, event.h)
@@ -820,20 +824,22 @@ class PyGameUI:
                                 break
 
                 # --- AUTO PASS LOGIC (HUMAN) ---
-                if self.game_mode == MODE_PvP or (self.game_mode == MODE_PvCPU and self.game_state.player == self.human_player):
+                # Timed notice instead of a blocking delay, so the browser build stays responsive
+                if self.pass_pending_state is not None:
+                    t = self.font_title.render("PASS!", True, (255, 0, 0))
+                    self.screen.blit(t, (self.board_area_size//2 - t.get_width()//2, self.board_area_size//2))
+                    if pygame.time.get_ticks() >= self.pass_notice_until:
+                        self.game_state = self.pass_pending_state
+                        self.pass_pending_state = None
+                        self.current_vis_data = None
+                elif self.game_mode == MODE_PvP or (self.game_mode == MODE_PvCPU and self.game_state.player == self.human_player):
                      if not self.game_state.is_terminal():
                          if not self.game_state.board.get_valid_moves(self.game_state.player):
                              # No moves -> Pass
                              succ = self.game_state.get_successors()
                              if succ:
-                                 # Render PASS notification
-                                 t = self.font_title.render("PASS!", True, (255, 0, 0))
-                                 self.screen.blit(t, (self.board_area_size//2 - t.get_width()//2, self.board_area_size//2))
-                                 pygame.display.flip()
-                                 pygame.time.delay(1000)
-                                 
-                                 self.game_state = succ[0]
-                                 self.current_vis_data = None
+                                 self.pass_pending_state = succ[0]
+                                 self.pass_notice_until = pygame.time.get_ticks() + 1000
                                  
                 if self.game_state.is_terminal() and self.app_state == STATE_PLAYING:
                      self.app_state = STATE_GAME_OVER
@@ -857,5 +863,11 @@ class PyGameUI:
 
             pygame.display.flip()
             self.clock.tick(30 if self.algo_mode else 60)
+            # Yield to the browser's event loop (required for the web build,
+            # harmless on desktop)
+            await asyncio.sleep(0)
 
         pygame.quit()
+
+    def run(self):
+        asyncio.run(self.run_async())
